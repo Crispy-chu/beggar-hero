@@ -123,6 +123,13 @@ const EXPEDITION_BUFFS = [
   { id: "fortune", icon: "🔮", name: "탐욕의 나침반", text: "획득 유물 조각 +25%" }
 ];
 
+const EXPEDITION_MILESTONES = [
+  { id: "depth1", depth: 1, icon: "🕯️", name: "첫 번째 어둠", reward: { gems: 100 }, text: "보석 100개" },
+  { id: "depth3", depth: 3, icon: "👁️", name: "심연을 보는 자", reward: { gems: 250 }, text: "보석 250개" },
+  { id: "depth5", depth: 5, icon: "💠", name: "깊은 곳의 생존자", reward: { souls: 2 }, text: "영혼석 2개" },
+  { id: "depth10", depth: 10, icon: "👑", name: "심연 정복자", reward: { gems: 500, souls: 3 }, text: "보석 500개 · 영혼석 3개" }
+];
+
 const LIFE_CONTRACTS = [
   { id: "labor", icon: "☝️", name: "맨손 노동왕", rule: "클릭 수익 4배 · 공격력과 체력 35% 감소", goal: "이번 생 1,000회 클릭 + 미니마왕 처치", metric: state => [state.runClicks || 0, 1000] },
   { id: "hunter", icon: "🏹", name: "현상금 사냥꾼", rule: "사냥 보상 5배 · 몬스터 체력 50%, 공격력 35% 증가", goal: "이번 생 몬스터 40마리 + 미니마왕 처치", metric: state => [state.runKills || 0, 40] },
@@ -146,7 +153,7 @@ const RELICS = [
 
 function freshState() {
   return {
-    balanceVersion: 10, money: 0, level: 1, xp: 0, statPoints: 0, souls: 0, gems: 0, relicShards: 0, legacyMarks: 0, worldTier: 1,
+    balanceVersion: 11, money: 0, level: 1, xp: 0, statPoints: 0, souls: 0, gems: 0, relicShards: 0, legacyMarks: 0, worldTier: 1,
     lifetimeClicks: 0, lifetimeKills: 0, lifetimeEnhances: 0, lifetimeEarned: 0, prestigeCount: 0, runClicks: 0, runKills: 0, runEarned: 0,
     clickLevels: {}, jobs: {}, training: {}, pointStats: {},
     owned: { weapons: [], armors: [], accessories: [] },
@@ -154,7 +161,7 @@ function freshState() {
     enhancements: {}, enhancePity: {}, blessings: {}, gemUpgrades: {}, legacyUpgrades: {}, relics: {}, equippedRelics: [], claimedGemPackages: {}, claimedChallenges: {}, discovered: {}, kills: {}, materials: {},
     activeContract: null, completedContracts: {},
     village: { forge: 0, inn: 0, guild: 0, museum: 0 },
-    expeditionBest: 0, expeditionDepth: 1,
+    expeditionBest: 0, expeditionDepth: 1, expeditionRuns: 0, expeditionWins: 0, claimedExpeditionMilestones: {},
     expedition: { active: false, depth: 1, floor: 1, buffs: { power: 0, vitality: 0, guard: 0, crit: 0, fortune: 0 }, playerHp: 0, enemyHp: 0, awaitingChoice: false, choices: [] },
     unlockedZone: 0, selectedZone: 0, selectedMonster: 0,
     miniDemonKills: 0, totalEarned: 0, lastSave: Date.now()
@@ -531,7 +538,6 @@ function renderMore() {
   const found = discoveredCount();
   const monsterTotal = DATA.zones.reduce((sum, zone) => sum + zone.monsters.length, 0);
   $("#codexProgress").textContent = `${found} / ${monsterTotal} 발견`;
-  $("#expeditionSummary").textContent = `최고 ${state.expeditionBest}층 · 유물 ${format(state.relicShards)}`;
   const villageLevels = Object.values(state.village).reduce((sum, level) => sum + Number(level || 0), 0);
   $("#villageSummary").textContent = villageLevels >= VILLAGE_BUILDINGS.length * 5 ? "복구 완료 · 영구 지원 4종" : `복구 ${villageLevels} / ${VILLAGE_BUILDINGS.length * 5}`;
   const contract = currentContract();
@@ -745,7 +751,8 @@ function expeditionEnemy(floor = state.expedition.floor) {
   ];
   const [name, icon] = enemies[Math.max(0, Math.min(9, floor - 1))];
   const depth = state.expedition.depth || state.expeditionDepth || 1;
-  const health = Math.max(30, Math.floor(stats().attack * (2.4 + floor * .55) * Math.pow(1.8, depth - 1)));
+  const elite = floor === 10 ? 1.35 : floor === 5 ? 1.2 : 1;
+  const health = Math.max(30, Math.floor(stats().attack * (2.4 + floor * .55) * Math.pow(1.8, depth - 1) * elite));
   return { name, icon, health };
 }
 
@@ -753,7 +760,8 @@ function expeditionIncomingDamage() {
   const s = stats();
   const base = Math.max(1, Math.floor(s.health * (.04 + state.expedition.floor * .005) - s.defense * .35));
   const depth = state.expedition.depth || state.expeditionDepth || 1;
-  return Math.max(1, Math.floor(base * Math.pow(1.35, depth - 1) * Math.max(.25, 1 - (state.expedition.buffs.guard || 0) * .15)));
+  const elite = state.expedition.floor === 10 ? 1.25 : state.expedition.floor === 5 ? 1.12 : 1;
+  return Math.max(1, Math.floor(base * Math.pow(1.35, depth - 1) * elite * Math.max(.25, 1 - (state.expedition.buffs.guard || 0) * .15)));
 }
 
 function expeditionEntryCost() { return Math.floor(Math.max(250000 * Math.pow(state.expeditionDepth, 2), clickValue() * 25 * state.expeditionDepth)); }
@@ -802,10 +810,25 @@ function renderExpedition() {
   const run = state.expedition;
   const enemy = expeditionEnemy();
   const maxHp = expeditionMaxHp();
+  const clearedDepth = Math.max(0, state.expeditionDepth - 1);
   $("#expeditionFloor").textContent = run.active ? `${run.floor} / 10층` : "대기 중";
   $("#expeditionBest").textContent = `${state.expeditionBest}층`;
   $("#expeditionDepth").textContent = `심도 ${run.active ? run.depth : state.expeditionDepth}`;
   $("#expeditionShards").textContent = format(state.relicShards);
+  $("#expeditionRunRecord").textContent = `도전 ${format(state.expeditionRuns || 0)} · 정복 ${format(state.expeditionWins || 0)}`;
+  $("#expeditionRoute").innerHTML = Array.from({ length: 10 }, (_, index) => {
+    const floor = index + 1;
+    const cleared = run.active && floor < run.floor;
+    const current = run.active && floor === run.floor;
+    const boss = floor === 5 || floor === 10;
+    return `<div class="expedition-node ${cleared ? "cleared" : ""} ${current ? "current" : ""} ${boss ? "boss" : ""}"><i>${cleared ? "✓" : boss ? "☠" : floor}</i><small>${floor}층</small></div>`;
+  }).join("");
+  const previewDepth = run.active ? run.depth : state.expeditionDepth;
+  const completed = run.active ? Math.max(0, run.floor - 1) : 0;
+  const fortune = run.active ? (run.buffs.fortune || 0) : 0;
+  $("#expeditionThreat").textContent = `체력 ×${Math.pow(1.8, previewDepth - 1).toFixed(2)} · 피해 ×${Math.pow(1.35, previewDepth - 1).toFixed(2)}`;
+  $("#expeditionRetreatReward").textContent = `🔮 ${format(expeditionRewardAt(previewDepth, completed, false, fortune))}개`;
+  $("#expeditionClearReward").textContent = `🔮 ${format(expeditionRewardAt(previewDepth, 10, true, fortune))}개`;
   $("#expeditionEnemyIcon").textContent = run.active ? enemy.icon : "🌀";
   $("#expeditionEnemyName").textContent = run.active ? enemy.name : "심연의 문";
   const playerHp = run.active ? Math.max(0, run.playerHp) : maxHp;
@@ -816,7 +839,7 @@ function renderExpedition() {
   $("#expeditionEnemyHpText").textContent = run.active ? `${format(enemyHp)} / ${format(enemy.health)}` : "도전 전";
   const buffs = EXPEDITION_BUFFS.filter(buff => run.buffs[buff.id]).map(buff => `${buff.icon} ${buff.name} ${run.buffs[buff.id] > 1 ? `×${run.buffs[buff.id]}` : ""}`);
   $("#expeditionBuffs").innerHTML = buffs.length ? buffs.map(text => `<span>${text}</span>`).join("") : "<small>아직 획득한 원정 효과가 없습니다.</small>";
-  $("#expeditionLog").textContent = run.active ? (run.awaitingChoice ? `${run.floor}층 돌파! 다음 층에 가져갈 힘을 고르세요.` : `심도 ${run.depth} · ${enemy.name}와 자동 전투 중입니다. 창을 닫으면 일시정지됩니다.`) : `심도 ${state.expeditionDepth} 도전. 클리어할 때마다 적과 보상이 강해지며 입장 골드가 필요합니다.`;
+  $("#expeditionLog").textContent = run.active ? (run.awaitingChoice ? `${run.floor}층 돌파! 다음 층에 가져갈 힘을 고르세요.` : `심도 ${run.depth} · ${enemy.name}와 자동 전투 중입니다. 다른 탭으로 이동하면 원정은 일시정지됩니다.`) : `심도 ${state.expeditionDepth} 도전. 5층과 10층은 정예 구간이며, 실패해도 돌파한 층의 조각은 확보합니다.`;
   $("#expeditionChoices").hidden = !run.awaitingChoice;
   $("#expeditionChoices").innerHTML = (run.choices || []).map(id => {
     const buff = EXPEDITION_BUFFS.find(item => item.id === id);
@@ -829,6 +852,13 @@ function renderExpedition() {
   $("#expeditionAction").disabled = run.active || state.money < entryCost;
   $("#expeditionAction").textContent = run.active ? "⚔ 자동 전투 중" : `🌀 심도 ${state.expeditionDepth} 시작 · ${format(entryCost)}원`;
   $("#expeditionAbandon").hidden = !run.active;
+  $("#expeditionMilestones").innerHTML = EXPEDITION_MILESTONES.map(item => {
+    const claimed = !!state.claimedExpeditionMilestones[item.id];
+    const unlocked = clearedDepth >= item.depth;
+    return `<article class="expedition-milestone ${claimed ? "claimed" : ""} ${unlocked ? "unlocked" : "locked"}"><span>${item.icon}</span><div><small>심도 ${item.depth} 정복</small><b>${item.name}</b><em>${item.text}</em></div><button data-action="claim-expedition-milestone" data-id="${item.id}" ${!unlocked || claimed ? "disabled" : ""}>${claimed ? "수령 완료" : unlocked ? "보상 받기" : `${clearedDepth} / ${item.depth}`}</button></article>`;
+  }).join("");
+  const hasMilestoneReward = EXPEDITION_MILESTONES.some(item => clearedDepth >= item.depth && !state.claimedExpeditionMilestones[item.id]);
+  $("#expeditionNavBadge").hidden = !run.active && !hasMilestoneReward;
   renderRelics();
 }
 
@@ -838,15 +868,33 @@ function startExpedition() {
   if (!spend(entryCost)) return showToast(`원정 입장에 ${format(entryCost)}원이 필요합니다.`);
   if (battle.active) stopBattle("심연 원정을 시작해 일반 사냥이 중단되었습니다.");
   state.expedition = { active: true, depth: state.expeditionDepth, floor: 1, buffs: { power: 0, vitality: 0, guard: 0, crit: 0, fortune: 0 }, playerHp: stats().health, enemyHp: 0, awaitingChoice: false, choices: [] };
+  state.expeditionRuns = (state.expeditionRuns || 0) + 1;
   state.expedition.enemyHp = expeditionEnemy(1).health;
   saveGame(false);
+  renderTop();
   renderExpedition();
 }
 
-function expeditionReward(completed, victory = false) {
+function expeditionRewardAt(depth, completed, victory = false, fortune = 0) {
   if (completed <= 0) return 0;
-  const base = (completed + (victory ? 5 : 0)) * (1 + ((state.expedition.depth || 1) - 1) * .75);
-  return Math.max(1, Math.floor(base * (1 + (state.expedition.buffs.fortune || 0) * .25) * (1 + (state.village.guild || 0) * .1) * (1 + relicLevel("map") * .2)));
+  const base = (completed + (victory ? 5 : 0)) * (1 + (Math.max(1, depth) - 1) * .75);
+  return Math.max(1, Math.floor(base * (1 + fortune * .25) * (1 + (state.village.guild || 0) * .1) * (1 + relicLevel("map") * .2)));
+}
+
+function expeditionReward(completed, victory = false) { return expeditionRewardAt(state.expedition.depth || 1, completed, victory, state.expedition.buffs.fortune || 0); }
+
+function claimExpeditionMilestone(id) {
+  const item = EXPEDITION_MILESTONES.find(entry => entry.id === id);
+  const clearedDepth = Math.max(0, state.expeditionDepth - 1);
+  if (!item || clearedDepth < item.depth || state.claimedExpeditionMilestones[id]) return;
+  state.claimedExpeditionMilestones[id] = true;
+  state.gems += item.reward.gems || 0;
+  state.souls += item.reward.souls || 0;
+  saveGame(false);
+  renderTop();
+  renderExpedition();
+  renderMore();
+  showToast(`${item.icon} ${item.name} 보상 · ${item.text}`);
 }
 
 function finishExpedition(victory, abandoned = false) {
@@ -854,7 +902,10 @@ function finishExpedition(victory, abandoned = false) {
   const reward = expeditionReward(completed, victory);
   state.expeditionBest = Math.max(state.expeditionBest, completed);
   state.relicShards += reward;
-  if (victory) state.expeditionDepth = Math.max(state.expeditionDepth, (state.expedition.depth || 1) + 1);
+  if (victory) {
+    state.expeditionDepth = Math.max(state.expeditionDepth, (state.expedition.depth || 1) + 1);
+    state.expeditionWins = (state.expeditionWins || 0) + 1;
+  }
   state.expedition.active = false;
   state.expedition.awaitingChoice = false;
   state.expedition.choices = [];
@@ -930,6 +981,7 @@ function render() {
   renderTraining();
   renderGear();
   renderHunt();
+  renderExpedition();
   renderMore();
 }
 
@@ -1163,6 +1215,9 @@ function prestige(nextContractId) {
   const relicShards = state.relicShards;
   const expeditionBest = state.expeditionBest;
   const expeditionDepth = state.expeditionDepth;
+  const expeditionRuns = state.expeditionRuns;
+  const expeditionWins = state.expeditionWins;
+  const claimedExpeditionMilestones = { ...state.claimedExpeditionMilestones };
   const relics = { ...state.relics };
   const equippedRelics = [...state.equippedRelics];
   const legacyUpgrades = { ...state.legacyUpgrades };
@@ -1185,6 +1240,9 @@ function prestige(nextContractId) {
   state.relicShards = relicShards;
   state.expeditionBest = expeditionBest;
   state.expeditionDepth = expeditionDepth;
+  state.expeditionRuns = expeditionRuns;
+  state.expeditionWins = expeditionWins;
+  state.claimedExpeditionMilestones = claimedExpeditionMilestones;
   state.relics = relics;
   state.equippedRelics = equippedRelics;
   state.legacyUpgrades = legacyUpgrades;
@@ -1265,7 +1323,7 @@ function switchScreen(target) {
   $$(".screen").forEach(screen => screen.classList.toggle("active", screen.dataset.screen === target));
   $$(".bottom-nav button").forEach(button => button.classList.toggle("active", button.dataset.target === target));
   renderTop();
-  ({ earn: () => { renderClickUpgrades(); renderJobs(); }, growth: renderTraining, hunt: renderHunt, gear: renderGear, more: renderMore })[target]?.();
+  ({ earn: () => { renderClickUpgrades(); renderJobs(); }, growth: renderTraining, hunt: renderHunt, gear: renderGear, expedition: renderExpedition, more: renderMore })[target]?.();
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
@@ -1279,8 +1337,8 @@ function hydrateSave(parsed, includeOffline = false) {
   const base = freshState();
   const merged = { ...base, ...parsed };
   const incomingVersion = Number(parsed.balanceVersion || 0);
-  merged.balanceVersion = 10;
-  ["clickLevels","jobs","training","pointStats","enhancements","enhancePity","blessings","gemUpgrades","legacyUpgrades","relics","completedContracts","claimedGemPackages","claimedChallenges","discovered","kills","materials","equipped"].forEach(key => merged[key] = { ...base[key], ...(parsed[key] || {}) });
+  merged.balanceVersion = 11;
+  ["clickLevels","jobs","training","pointStats","enhancements","enhancePity","blessings","gemUpgrades","legacyUpgrades","relics","completedContracts","claimedGemPackages","claimedChallenges","claimedExpeditionMilestones","discovered","kills","materials","equipped"].forEach(key => merged[key] = { ...base[key], ...(parsed[key] || {}) });
   merged.owned = { ...base.owned, ...(parsed.owned || {}) };
   merged.village = { ...base.village, ...(parsed.village || {}) };
   merged.expedition = { ...base.expedition, ...(parsed.expedition || {}) };
@@ -1297,6 +1355,8 @@ function hydrateSave(parsed, includeOffline = false) {
   RELICS.forEach(item => { merged.relics[item.id] = Math.max(0, Math.min(5, Math.floor(Number(merged.relics[item.id]) || 0))); });
   merged.expeditionBest = Math.max(0, Math.min(10, Math.floor(Number(merged.expeditionBest) || 0)));
   merged.expeditionDepth = Math.max(1, Math.min(100, Math.floor(Number(parsed.expeditionDepth ?? (merged.expeditionBest >= 10 ? 2 : 1)) || 1)));
+  merged.expeditionRuns = Math.max(0, Math.floor(Number(merged.expeditionRuns) || 0));
+  merged.expeditionWins = Math.max(0, Math.floor(Number(merged.expeditionWins) || 0));
   merged.expedition.depth = Math.max(1, Math.min(100, Math.floor(Number(merged.expedition.depth) || merged.expeditionDepth)));
   merged.expedition.floor = Math.max(1, Math.min(10, Math.floor(Number(merged.expedition.floor) || 1)));
   merged.expedition.playerHp = Math.max(0, Number(merged.expedition.playerHp) || 0);
@@ -1543,7 +1603,7 @@ document.addEventListener("click", (event) => {
   const action = event.target.closest("[data-action]");
   if (action) {
     const id = action.dataset.id;
-    const actions = { "buy-click": buyClick, "buy-job": buyJob, "buy-training": buyTraining, "spend-point": spendPoint, "buy-gear": buyGear, "select-monster": selectMonster, "buy-blessing": buyBlessing, "buy-gems": buyGems, "buy-gem-item": buyGemItem, "claim-challenge": claimChallenge, "upgrade-village": upgradeVillage, "choose-expedition": chooseExpeditionBuff, "start-contract": prestige, "buy-legacy": buyLegacy, "toggle-relic": toggleRelic };
+    const actions = { "buy-click": buyClick, "buy-job": buyJob, "buy-training": buyTraining, "spend-point": spendPoint, "buy-gear": buyGear, "select-monster": selectMonster, "buy-blessing": buyBlessing, "buy-gems": buyGems, "buy-gem-item": buyGemItem, "claim-challenge": claimChallenge, "claim-expedition-milestone": claimExpeditionMilestone, "upgrade-village": upgradeVillage, "choose-expedition": chooseExpeditionBuff, "start-contract": prestige, "buy-legacy": buyLegacy, "toggle-relic": toggleRelic };
     actions[action.dataset.action]?.(id);
   }
 });
@@ -1579,8 +1639,6 @@ function openProfileSheet() { renderProfile(); $("#profileModal").hidden = false
 function closeProfileSheet() { $("#profileModal").hidden = true; }
 function openCodexSheet() { renderCodex(); $("#codexModal").hidden = false; }
 function closeCodexSheet() { $("#codexModal").hidden = true; }
-function openExpeditionSheet() { renderExpedition(); $("#expeditionModal").hidden = false; }
-function closeExpeditionSheet() { $("#expeditionModal").hidden = true; expeditionElapsed = 0; }
 function openVillageSheet() { renderVillage(); $("#villageModal").hidden = false; }
 function closeVillageSheet() { $("#villageModal").hidden = true; }
 function openContractSheet() { renderContracts(); $("#contractModal").hidden = false; }
@@ -1590,8 +1648,6 @@ $("#openProfileMore").addEventListener("click", openProfileSheet);
 $("#closeProfile").addEventListener("click", closeProfileSheet);
 $("#openCodex").addEventListener("click", openCodexSheet);
 $("#closeCodex").addEventListener("click", closeCodexSheet);
-$("#openExpedition").addEventListener("click", openExpeditionSheet);
-$("#closeExpedition").addEventListener("click", closeExpeditionSheet);
 $("#expeditionAction").addEventListener("click", startExpedition);
 $("#expeditionAbandon").addEventListener("click", () => finishExpedition(false, true));
 $("#openVillage").addEventListener("click", openVillageSheet);
@@ -1601,7 +1657,6 @@ $("#closeContracts").addEventListener("click", closeContractSheet);
 $("#craftRelic").addEventListener("click", craftRelic);
 $("#profileModal").addEventListener("click", event => { if (event.target === $("#profileModal")) closeProfileSheet(); });
 $("#codexModal").addEventListener("click", event => { if (event.target === $("#codexModal")) closeCodexSheet(); });
-$("#expeditionModal").addEventListener("click", event => { if (event.target === $("#expeditionModal")) closeExpeditionSheet(); });
 $("#villageModal").addEventListener("click", event => { if (event.target === $("#villageModal")) closeVillageSheet(); });
 $("#contractModal").addEventListener("click", event => { if (event.target === $("#contractModal")) closeContractSheet(); });
 $("#battleButton").addEventListener("click", () => battle.active ? stopBattle() : startBattle());
@@ -1652,7 +1707,7 @@ setInterval(() => {
     battle.elapsed += delta;
     if (battle.elapsed >= 1) { battle.elapsed -= 1; battleTurn(); }
   }
-  if (state.expedition.active && !state.expedition.awaitingChoice && !$("#expeditionModal").hidden) {
+  if (state.expedition.active && !state.expedition.awaitingChoice && $("[data-screen='expedition']").classList.contains("active")) {
     expeditionElapsed += delta;
     if (expeditionElapsed >= 1) { expeditionElapsed -= 1; expeditionTurn(); }
   }

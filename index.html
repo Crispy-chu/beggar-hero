@@ -142,6 +142,50 @@
         <div class="card-list" id="shopList"></div>
       </section>
 
+      <section class="screen abyss-screen" data-screen="expedition">
+        <div class="abyss-hero">
+          <div class="abyss-hero-copy">
+            <small>끝없이 깊어지는 10층 연속 전투</small>
+            <h2>심연 원정</h2>
+            <p>층을 돌파할 때마다 힘을 하나 선택하세요. 살아서 철수하면 확보한 조각을, 10층을 정복하면 다음 심도를 엽니다.</p>
+          </div>
+          <span class="abyss-orb">🌀</span>
+        </div>
+
+        <div class="expedition-overview">
+          <div><small>현재 층</small><b id="expeditionFloor">대기 중</b></div>
+          <div><small>최고 기록</small><b id="expeditionBest">0층</b></div>
+          <div><small>도전 심도</small><b id="expeditionDepth">심도 1</b></div>
+          <div><small>유물 조각</small><b>🔮 <span id="expeditionShards">0</span></b></div>
+        </div>
+
+        <div class="abyss-section-heading"><div><small>한 칸씩 내려가는 심연</small><h3>원정 경로</h3></div><span id="expeditionRunRecord">도전 0 · 정복 0</span></div>
+        <div class="expedition-route" id="expeditionRoute"></div>
+        <div class="expedition-intel">
+          <div><small>현재 위험도</small><b id="expeditionThreat">적 체력 ×1.00</b></div>
+          <div><small>지금 철수</small><b id="expeditionRetreatReward">🔮 0개</b></div>
+          <div><small>10층 정복</small><b id="expeditionClearReward">🔮 0개</b></div>
+        </div>
+
+        <div class="expedition-arena">
+          <div class="expedition-fighter"><img src="assets/hero-sapphire.png" alt="내 캐릭터"><b>나</b><div class="hp"><i id="expeditionPlayerHpBar"></i></div><small id="expeditionPlayerHpText">0 / 0</small></div>
+          <strong>VS</strong>
+          <div class="expedition-fighter"><span id="expeditionEnemyIcon">🌀</span><b id="expeditionEnemyName">심연의 문</b><div class="hp enemy"><i id="expeditionEnemyHpBar"></i></div><small id="expeditionEnemyHpText">도전 전</small></div>
+        </div>
+        <p class="expedition-log" id="expeditionLog">10개 층을 연속으로 돌파하세요.</p>
+        <div class="expedition-buffs" id="expeditionBuffs"></div>
+        <div class="expedition-choices" id="expeditionChoices" hidden></div>
+        <button class="primary-button abyss-action" id="expeditionAction">🌀 새 원정 시작</button>
+        <button class="expedition-abandon" id="expeditionAbandon" hidden>확보한 조각을 들고 철수</button>
+
+        <div class="abyss-section-heading"><div><small>더 깊이 내려갈수록 특별 보상</small><h3>심도 정복 기록</h3></div><span>계정 영구 보상</span></div>
+        <div class="expedition-milestones" id="expeditionMilestones"></div>
+
+        <div class="relic-heading"><div><small>유물 조각의 사용처</small><h3>심연 유물 공방</h3></div><span id="relicSlots">0 / 2 장착</span></div>
+        <button class="relic-craft" id="craftRelic">🔮 <span id="relicCraftCost">15</span>개로 유물 제작</button>
+        <div class="relic-list" id="relicList"></div>
+      </section>
+
       <section class="screen" data-screen="more">
         <div class="gem-store-card">
           <div class="gem-store-head">
@@ -168,7 +212,6 @@
         <div class="feature-grid">
           <button id="openProfileMore"><span>🧾</span><b>내 정보</b><small>적용 효과·스탯 설명</small></button>
           <button id="openCodex"><span>📖</span><b>몬스터 도감</b><small id="codexProgress">0 / 0 발견</small></button>
-          <button id="openExpedition"><span>🌀</span><b>심연 원정</b><small id="expeditionSummary">최고 0층 · 유물 0</small></button>
           <button id="openVillage"><span>🏘️</span><b>거지마을</b><small id="villageSummary">복구 0 / 20</small></button>
           <button id="openContracts"><span>📜</span><b>환생 계약소</b><small id="contractSummary">계약 없음 · 세계 1</small></button>
         </div>
@@ -192,6 +235,7 @@
       <button data-target="growth"><span>💪</span>성장</button>
       <button data-target="hunt"><span>⚔️</span>사냥</button>
       <button data-target="gear"><span>🎒</span>장비</button>
+      <button data-target="expedition"><span>🌀</span>원정<i id="expeditionNavBadge" hidden></i></button>
       <button data-target="more"><span>☰</span>더보기</button>
     </nav>
   </div>
@@ -245,32 +289,6 @@
           <button class="load-code-button" id="loadSaveCode">이 코드로 진행 불러오기</button>
         </div>
         <p class="cloud-status" id="saveCodeStatus">코드를 발급하거나 입력하세요.</p>
-      </div>
-    </section>
-  </div>
-  <div class="modal-backdrop sheet-backdrop" id="expeditionModal" hidden>
-    <section class="info-sheet expedition-sheet" role="dialog" aria-modal="true" aria-labelledby="expeditionTitle">
-      <header><div><small>매번 다른 힘을 골라 10층 돌파</small><h2 id="expeditionTitle">심연 원정</h2></div><button id="closeExpedition" aria-label="심연 원정 닫기">×</button></header>
-      <div class="sheet-scroll">
-        <div class="expedition-overview">
-          <div><small>현재 층</small><b id="expeditionFloor">대기 중</b></div>
-          <div><small>최고 기록</small><b id="expeditionBest">0층</b></div>
-          <div><small>현재 난도</small><b id="expeditionDepth">심도 1</b></div>
-          <div><small>유물 조각</small><b>🔮 <span id="expeditionShards">0</span></b></div>
-        </div>
-        <div class="expedition-arena">
-          <div class="expedition-fighter"><img src="assets/hero-sapphire.png" alt="내 캐릭터"><b>나</b><div class="hp"><i id="expeditionPlayerHpBar"></i></div><small id="expeditionPlayerHpText">0 / 0</small></div>
-          <strong>VS</strong>
-          <div class="expedition-fighter"><span id="expeditionEnemyIcon">🌀</span><b id="expeditionEnemyName">심연의 문</b><div class="hp enemy"><i id="expeditionEnemyHpBar"></i></div><small id="expeditionEnemyHpText">도전 전</small></div>
-        </div>
-        <p class="expedition-log" id="expeditionLog">10개 층을 연속으로 돌파하세요.</p>
-        <div class="expedition-buffs" id="expeditionBuffs"></div>
-        <div class="expedition-choices" id="expeditionChoices" hidden></div>
-        <button class="primary-button" id="expeditionAction">🌀 새 원정 시작</button>
-        <button class="expedition-abandon" id="expeditionAbandon" hidden>이번 원정 철수</button>
-        <div class="relic-heading"><div><small>유물 조각의 사용처</small><h3>심연 유물 공방</h3></div><span id="relicSlots">0 / 2 장착</span></div>
-        <button class="relic-craft" id="craftRelic">🔮 <span id="relicCraftCost">15</span>개로 유물 제작</button>
-        <div class="relic-list" id="relicList"></div>
       </div>
     </section>
   </div>
