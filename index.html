@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta name="theme-color" content="#14110f">
+  <title>무한 거지 용사</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">거지에서 마왕까지</p>
+        <h1>무한 거지 용사 <span>β</span></h1>
+      </div>
+      <button class="icon-button" id="saveButton" aria-label="세이브 코드 열기">🔑</button>
+    </header>
+
+    <section class="wallet" aria-label="현재 자산">
+      <div class="wallet-copy">
+        <span>내 전 재산</span>
+        <strong id="money">0원</strong>
+      </div>
+      <div class="income-pill"><i></i><span id="incomePerSecond">+0원 / 초</span></div>
+    </section>
+
+    <aside class="sticky-wallet" id="stickyWallet" aria-hidden="true">
+      <span>내 전 재산</span>
+      <strong id="stickyMoney">0원</strong>
+      <small id="stickyIncome">+0원 / 초</small>
+    </aside>
+
+    <div class="level-strip">
+      <button class="avatar-mini" id="openProfile" aria-label="내 정보 열기"><img src="assets/hero-sapphire.png" alt=""><i>정보</i></button>
+      <div class="level-info">
+        <div><b id="levelLabel">Lv.1</b><span id="titleLabel">맨발의 거지</span></div>
+        <div class="progress"><i id="xpBar"></i></div>
+        <small id="xpText">0 / 100 XP</small>
+      </div>
+      <div class="currency-stack">
+        <div class="gem-chip">💎 <span id="gemCount">0</span></div>
+        <div class="soul-chip">💠 <span id="soulCount">0</span></div>
+      </div>
+    </div>
+
+    <main>
+      <section class="screen active" data-screen="earn">
+        <button class="earn-button" id="earnButton">
+          <span class="earn-spark spark-a">✦</span>
+          <span class="earn-spark spark-b">✧</span>
+          <span class="coin-stack">🪙</span>
+          <strong>돈 벌기!</strong>
+          <small id="clickIncome">한 번에 +1원</small>
+        </button>
+
+        <div class="section-heading">
+          <div><span>더 야무지게</span><h2>손기술</h2></div>
+          <small>클릭 수익을 키워요</small>
+        </div>
+        <div class="card-list compact" id="clickList"></div>
+
+        <div class="section-heading">
+          <div><span>자동 수익</span><h2>일거리</h2></div>
+          <small>가만히 있어도 착실하게</small>
+        </div>
+        <div class="card-list" id="jobsList"></div>
+      </section>
+
+      <section class="screen" data-screen="growth">
+        <div class="hero-card">
+          <div class="hero-stage">
+            <span class="hero-shadow"></span>
+            <img class="hero-figure" id="heroFigure" src="assets/hero-sapphire.png" alt="사파이어 용사">
+            <span class="hero-weapon" id="heroWeapon" hidden>🪵</span>
+          </div>
+          <div class="stat-grid">
+            <div><span>⚔ 공격</span><b id="attackStat">5</b></div>
+            <div><span>♥ 체력</span><b id="healthStat">100</b></div>
+            <div><span>◆ 방어</span><b id="defenseStat">0</b></div>
+            <div><span>✦ 행운</span><b id="luckStat">0</b></div>
+          </div>
+          <p class="point-line">남은 스탯 포인트 <b id="statPoints">0</b></p>
+        </div>
+
+        <div class="section-heading"><div><span>몸이 곧 재산</span><h2>훈련소</h2></div></div>
+        <div class="growth-notice"><span>📈</span><div><b>훈련은 장비 성장을 보조합니다</b><small>50회마다 훈련 1회의 효과가 1단계씩 증가합니다. 비용은 현재 클릭 수익에 맞춰 올라가 지나치게 싸거나 비싸지지 않습니다.</small></div></div>
+        <div class="card-list compact" id="trainingList"></div>
+        <div class="section-heading"><div><span>레벨 보너스 배분</span><h2>스탯 포인트</h2></div></div>
+        <div class="point-grid" id="pointList"></div>
+      </section>
+
+      <section class="screen" data-screen="hunt">
+        <div class="battle-card">
+          <div class="zone-row">
+            <button id="prevZone" aria-label="이전 지역">‹</button>
+            <div><small id="zoneNumber">지역 1</small><h2 id="zoneName">뒷골목</h2></div>
+            <button id="nextZone" aria-label="다음 지역">›</button>
+          </div>
+          <div class="battle-stage">
+            <div class="fighter">
+              <img class="sprite hero-sprite" src="assets/hero-sapphire.png" alt="플레이어">
+              <b>나</b>
+              <div class="hp"><i id="playerHpBar"></i></div>
+              <small id="playerHpText">100 / 100</small>
+            </div>
+            <div class="versus">VS</div>
+            <div class="fighter monster-side">
+              <div class="sprite" id="monsterSprite">🟢</div>
+              <b id="monsterName">슬라임</b>
+              <div class="hp enemy"><i id="monsterHpBar"></i></div>
+              <small id="monsterHpText">30 / 30</small>
+            </div>
+          </div>
+          <div class="battle-log" id="battleLog">상대를 고르고 사냥을 시작하세요.</div>
+          <button class="primary-button" id="battleButton">⚔ 사냥 시작</button>
+        </div>
+        <div class="section-heading"><div><span>현상금 목록</span><h2>몬스터</h2></div><small id="zoneClearText">0 / 3 처치</small></div>
+        <div class="monster-list" id="monsterList"></div>
+      </section>
+
+      <section class="screen" data-screen="gear">
+        <div class="equipped-card">
+          <div class="equipment-slot"><span>무기</span><b id="equippedWeapon">맨주먹</b><small id="weaponBonus">공격력 +0</small><button data-enhance="weapon">강화</button></div>
+          <div class="equipment-slot"><span>방어구</span><b id="equippedArmor">누더기</b><small id="armorBonus">체력 +0 · 방어 +0</small><button data-enhance="armor">강화</button></div>
+          <div class="equipment-slot"><span>장신구</span><b id="equippedAccessory">비어 있음</b><small id="accessoryBonus">효과 없음</small><button data-enhance="accessory">강화</button></div>
+        </div>
+        <div class="enhance-banner"><span>✨</span><div><b>장비 강화 · 최대 +30</b><small>모든 단계는 능력치가 10%씩 증가합니다. 실패할 때마다 다음 성공률이 5%씩 오르며 강화 단계는 내려가지 않습니다.</small></div></div>
+        <div class="enhance-tiers"><span><b>+10</b> 2배</span><span><b>+20</b> 3배</span><span><b>+30</b> 4배</span></div>
+        <div class="shop-tabs" id="shopTabs">
+          <button class="active" data-shop="weapons">무기</button>
+          <button data-shop="armors">방어구</button>
+          <button data-shop="accessories">장신구</button>
+        </div>
+        <div class="card-list" id="shopList"></div>
+      </section>
+
+      <section class="screen" data-screen="more">
+        <div class="gem-store-card">
+          <div class="gem-store-head">
+            <div><small>모의 결제 상점</small><h2>보석 상점</h2></div>
+            <strong>💎 <span id="shopGemCount">0</span></strong>
+          </div>
+          <p>결제 테스트용으로 즉시 지급되며, 밸런스 보호를 위해 패키지마다 1회만 구매할 수 있습니다.</p>
+          <div class="gem-tabs" id="gemTabs">
+            <button class="active" data-gem-tab="purchase">보석 구매</button>
+            <button data-gem-tab="shop">보석 상점</button>
+          </div>
+          <div class="gem-grid" id="gemStoreList"></div>
+        </div>
+
+        <div class="prestige-card">
+          <span class="portal">💠</span>
+          <small>새 삶을 살 준비가 되었나요?</small>
+          <h2>환생</h2>
+          <p>미니마왕을 쓰러뜨린 뒤 다음 삶의 계약을 고릅니다. 계약을 완수하면 더 강한 세계와 운명 인장이 열립니다.</p>
+          <div class="prestige-reward">예상 영혼석 <b id="prestigeReward">0개</b></div>
+          <button class="primary-button" id="prestigeButton" disabled>아직 때가 아니다</button>
+        </div>
+        <div class="section-heading"><div><span>모험은 기록으로 남는다</span><h2>모험 기록</h2></div></div>
+        <div class="feature-grid">
+          <button id="openProfileMore"><span>🧾</span><b>내 정보</b><small>적용 효과·스탯 설명</small></button>
+          <button id="openCodex"><span>📖</span><b>몬스터 도감</b><small id="codexProgress">0 / 0 발견</small></button>
+          <button id="openExpedition"><span>🌀</span><b>심연 원정</b><small id="expeditionSummary">최고 0층 · 유물 0</small></button>
+          <button id="openVillage"><span>🏘️</span><b>거지마을</b><small id="villageSummary">복구 0 / 20</small></button>
+          <button id="openContracts"><span>📜</span><b>환생 계약소</b><small id="contractSummary">계약 없음 · 세계 1</small></button>
+        </div>
+        <div class="section-heading"><div><span>목표 달성 보상</span><h2>도전과제</h2></div><small id="challengeProgress">0 / 0 완료</small></div>
+        <div class="challenge-list" id="challengeList"></div>
+        <div class="section-heading"><div><span>영원히 남는 힘</span><h2>영혼의 축복</h2></div></div>
+        <div class="card-list compact" id="blessingList"></div>
+        <div class="system-card">
+          <button id="openSaveCode">🔑 세이브 코드</button>
+          <button id="manualSave">💾 세이브 저장</button>
+          <button id="manualLoad">📂 불러오기</button>
+          <button id="restoreBackup">🛟 백업 복구</button>
+          <button id="resetButton">↻ 처음부터 다시</button>
+        </div>
+        <p class="version">자동 저장 + 별도 수동 세이브 슬롯을 지원합니다</p>
+      </section>
+    </main>
+
+    <nav class="bottom-nav" aria-label="주 메뉴">
+      <button class="active" data-target="earn"><span>🪙</span>돈벌기</button>
+      <button data-target="growth"><span>💪</span>성장</button>
+      <button data-target="hunt"><span>⚔️</span>사냥</button>
+      <button data-target="gear"><span>🎒</span>장비</button>
+      <button data-target="more"><span>☰</span>더보기</button>
+    </nav>
+  </div>
+
+  <div class="toast" id="toast" role="status"></div>
+  <div class="event-banner" id="eventBanner" hidden>
+    <button class="event-card" id="eventButton">
+      <span id="eventIcon">🐷</span>
+      <div><b id="eventTitle">황금돼지 출현!</b><small id="eventText">눌러서 보상을 받으세요</small></div>
+      <i id="eventTimer"></i>
+    </button>
+  </div>
+  <div class="modal-backdrop" id="confirmModal" hidden>
+    <div class="modal">
+      <span>⚠️</span><h2>정말 처음부터?</h2><p>현재 자동·수동 세이브는 초기화되지만 안전 백업은 남습니다.</p>
+      <div><button id="cancelReset">취소</button><button class="danger" id="confirmReset">초기화</button></div>
+    </div>
+  </div>
+  <div class="modal-backdrop sheet-backdrop" id="profileModal" hidden>
+    <section class="info-sheet" role="dialog" aria-modal="true" aria-labelledby="profileTitle">
+      <header><div><small>현재 적용 중인 모든 효과</small><h2 id="profileTitle">내 정보</h2></div><button id="closeProfile" aria-label="내 정보 닫기">×</button></header>
+      <div class="sheet-scroll">
+        <div class="profile-total" id="profileTotals"></div>
+        <h3>적용 보너스</h3>
+        <div class="bonus-list" id="bonusList"></div>
+        <h3>스탯 설명</h3>
+        <div class="stat-help" id="statHelp"></div>
+      </div>
+    </section>
+  </div>
+  <div class="modal-backdrop sheet-backdrop" id="codexModal" hidden>
+    <section class="info-sheet" role="dialog" aria-modal="true" aria-labelledby="codexTitle">
+      <header><div><small>발견할 때마다 사냥 보상 +1%</small><h2 id="codexTitle">몬스터 도감</h2></div><button id="closeCodex" aria-label="몬스터 도감 닫기">×</button></header>
+      <div class="sheet-scroll"><div class="codex-grid" id="codexList"></div></div>
+    </section>
+  </div>
+  <div class="modal-backdrop sheet-backdrop" id="saveCodeModal" hidden>
+    <section class="info-sheet save-code-sheet" role="dialog" aria-modal="true" aria-labelledby="saveCodeTitle">
+      <header><div><small>서버 없이 다른 기기에서 이어하기</small><h2 id="saveCodeTitle">세이브 코드</h2></div><button id="closeSaveCode" aria-label="세이브 코드 닫기">×</button></header>
+      <div class="sheet-scroll">
+        <div class="cloud-notice"><span>🧳</span><p>코드 안에 현재 진행 상황이 들어 있습니다. 코드를 메모하거나 다른 기기로 보내 보관하세요.</p></div>
+        <div class="save-code-section">
+          <div class="save-code-heading"><div><b>현재 상태 코드 발급</b><small>발급할 때마다 최신 상태가 반영됩니다.</small></div><button id="generateSaveCode">새 코드 발급</button></div>
+          <textarea id="saveCodeOutput" readonly placeholder="새 코드 발급을 누르세요"></textarea>
+          <div class="save-code-meta"><span id="saveCodeLength">아직 발급되지 않음</span><button id="copySaveCode" disabled>코드 복사</button></div>
+        </div>
+        <div class="save-code-divider"><span>다른 기기에서 불러오기</span></div>
+        <div class="save-code-section">
+          <label for="saveCodeInput"><b>세이브 코드 입력</b><small>공백이나 줄바꿈은 자동으로 제거됩니다.</small></label>
+          <textarea id="saveCodeInput" placeholder="BH4로 시작하는 세이브 코드를 붙여 넣으세요"></textarea>
+          <button class="load-code-button" id="loadSaveCode">이 코드로 진행 불러오기</button>
+        </div>
+        <p class="cloud-status" id="saveCodeStatus">코드를 발급하거나 입력하세요.</p>
+      </div>
+    </section>
+  </div>
+  <div class="modal-backdrop sheet-backdrop" id="expeditionModal" hidden>
+    <section class="info-sheet expedition-sheet" role="dialog" aria-modal="true" aria-labelledby="expeditionTitle">
+      <header><div><small>매번 다른 힘을 골라 10층 돌파</small><h2 id="expeditionTitle">심연 원정</h2></div><button id="closeExpedition" aria-label="심연 원정 닫기">×</button></header>
+      <div class="sheet-scroll">
+        <div class="expedition-overview">
+          <div><small>현재 층</small><b id="expeditionFloor">대기 중</b></div>
+          <div><small>최고 기록</small><b id="expeditionBest">0층</b></div>
+          <div><small>현재 난도</small><b id="expeditionDepth">심도 1</b></div>
+          <div><small>유물 조각</small><b>🔮 <span id="expeditionShards">0</span></b></div>
+        </div>
+        <div class="expedition-arena">
+          <div class="expedition-fighter"><img src="assets/hero-sapphire.png" alt="내 캐릭터"><b>나</b><div class="hp"><i id="expeditionPlayerHpBar"></i></div><small id="expeditionPlayerHpText">0 / 0</small></div>
+          <strong>VS</strong>
+          <div class="expedition-fighter"><span id="expeditionEnemyIcon">🌀</span><b id="expeditionEnemyName">심연의 문</b><div class="hp enemy"><i id="expeditionEnemyHpBar"></i></div><small id="expeditionEnemyHpText">도전 전</small></div>
+        </div>
+        <p class="expedition-log" id="expeditionLog">10개 층을 연속으로 돌파하세요.</p>
+        <div class="expedition-buffs" id="expeditionBuffs"></div>
+        <div class="expedition-choices" id="expeditionChoices" hidden></div>
+        <button class="primary-button" id="expeditionAction">🌀 새 원정 시작</button>
+        <button class="expedition-abandon" id="expeditionAbandon" hidden>이번 원정 철수</button>
+        <div class="relic-heading"><div><small>유물 조각의 사용처</small><h3>심연 유물 공방</h3></div><span id="relicSlots">0 / 2 장착</span></div>
+        <button class="relic-craft" id="craftRelic">🔮 <span id="relicCraftCost">15</span>개로 유물 제작</button>
+        <div class="relic-list" id="relicList"></div>
+      </div>
+    </section>
+  </div>
+  <div class="modal-backdrop sheet-backdrop" id="villageModal" hidden>
+    <section class="info-sheet village-sheet" role="dialog" aria-modal="true" aria-labelledby="villageTitle">
+      <header><div><small>골드와 전리품으로 영구 시설 복구</small><h2 id="villageTitle">거지마을 재건</h2></div><button id="closeVillage" aria-label="거지마을 닫기">×</button></header>
+      <div class="sheet-scroll">
+        <div class="village-wallet"><div><small>보유 골드</small><b id="villageGold">0원</b></div><div><small>몬스터 재료</small><b id="villageMaterials">0개</b></div></div>
+        <div class="village-notice"><span>🏚️</span><p><b>거지마을은 별도 게임이 아니라 영구 지원 시설입니다.</b><br>대장간은 강화비, 여관은 오프라인 수익, 길드는 원정 보상, 박물관은 도감 보상을 지원하며 환생 후에도 유지됩니다.</p></div>
+        <div class="village-list" id="villageList"></div>
+      </div>
+    </section>
+  </div>
+  <div class="modal-backdrop sheet-backdrop" id="contractModal" hidden>
+    <section class="info-sheet contract-sheet" role="dialog" aria-modal="true" aria-labelledby="contractTitle">
+      <header><div><small>매번 다른 규칙으로 다시 사는 엔드게임</small><h2 id="contractTitle">환생 계약소</h2></div><button id="closeContracts" aria-label="환생 계약소 닫기">×</button></header>
+      <div class="sheet-scroll">
+        <div class="contract-currencies"><b id="contractWorldTier">세계 1</b><span>◆ 운명 인장 <strong id="legacyMarkCount">0</strong></span></div>
+        <div class="active-contract" id="activeContract"></div>
+        <p class="contract-warning" id="contractWarning"></p>
+        <h3>다음 삶의 계약</h3>
+        <div class="contract-choices" id="contractChoices"></div>
+        <div class="legacy-heading"><div><small>계약 완수 보상 사용처</small><h3>운명 계승</h3></div><span>최대 Lv.10</span></div>
+        <div class="legacy-shop" id="legacyShop"></div>
+      </div>
+    </section>
+  </div>
+  <div class="enhance-fx" id="enhanceFx" hidden>
+    <div class="enhance-burst"></div><span id="enhanceFxIcon">✨</span><strong id="enhanceFxTitle">강화 성공!</strong><small id="enhanceFxText">장비가 더욱 강해졌습니다</small>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
