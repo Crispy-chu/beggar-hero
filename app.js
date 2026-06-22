@@ -1452,18 +1452,6 @@ function loadManualGame() {
   } catch { showToast("세이브를 불러오지 못했습니다."); }
 }
 
-function restoreBackupGame() {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(SAVE_CODE_ROLLBACK_KEY) || localStorage.getItem(BACKUP_SAVE_KEY));
-    if (!parsed) return showToast("복구할 안전 백업이 없습니다.");
-    battle.active = false;
-    state = hydrateSave(parsed, false);
-    saveGame(false);
-    render();
-    showToast("이전 안전 백업을 복구했습니다.");
-  } catch { showToast("안전 백업을 복구하지 못했습니다."); }
-}
-
 function setSaveCodeStatus(message, type = "") {
   const status = $("#saveCodeStatus");
   status.textContent = message;
@@ -1634,7 +1622,6 @@ $("#copySaveCode").addEventListener("click", copySaveCode);
 $("#loadSaveCode").addEventListener("click", loadFromSaveCode);
 $("#manualSave").addEventListener("click", saveManualGame);
 $("#manualLoad").addEventListener("click", loadManualGame);
-$("#restoreBackup").addEventListener("click", restoreBackupGame);
 function openProfileSheet() { renderProfile(); $("#profileModal").hidden = false; }
 function closeProfileSheet() { $("#profileModal").hidden = true; }
 function openCodexSheet() { renderCodex(); $("#codexModal").hidden = false; }
