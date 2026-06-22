@@ -11,6 +11,8 @@ const JOB_MASTERY_MULTIPLIER = 3;
 const TRAINING_PRICE_GROWTH = 1.085;
 const TRAINING_MASTERY_STEP = 50;
 const MAX_ENHANCEMENT = 30;
+const AUTO_CAP_RATIO = 1;
+const OFFLINE_INCOME_EFFICIENCY = .15;
 
 const DATA = {
   clickUpgrades: [
@@ -124,7 +126,7 @@ const EXPEDITION_BUFFS = [
 const LIFE_CONTRACTS = [
   { id: "labor", icon: "☝️", name: "맨손 노동왕", rule: "클릭 수익 4배 · 공격력과 체력 35% 감소", goal: "이번 생 1,000회 클릭 + 미니마왕 처치", metric: state => [state.runClicks || 0, 1000] },
   { id: "hunter", icon: "🏹", name: "현상금 사냥꾼", rule: "사냥 보상 5배 · 몬스터 체력 50%, 공격력 35% 증가", goal: "이번 생 몬스터 40마리 + 미니마왕 처치", metric: state => [state.runKills || 0, 40] },
-  { id: "tycoon", icon: "🏦", name: "무일푼 재벌", rule: "클릭·자동수익 2.5배 · 사냥 골드 80% 감소", goal: "이번 생 목표 금액 벌기 + 미니마왕 처치", metric: state => [state.runEarned || 0, contractMoneyGoal()] }
+  { id: "tycoon", icon: "🏦", name: "무일푼 재벌", rule: "클릭 수익 2.5배 · 자동수익 50% · 사냥 골드 80% 감소", goal: "이번 생 목표 금액 벌기 + 미니마왕 처치", metric: state => [state.runEarned || 0, contractMoneyGoal()] }
 ];
 
 const LEGACY_UPGRADES = [
@@ -144,7 +146,7 @@ const RELICS = [
 
 function freshState() {
   return {
-    balanceVersion: 9, money: 0, level: 1, xp: 0, statPoints: 0, souls: 0, gems: 0, relicShards: 0, legacyMarks: 0, worldTier: 1,
+    balanceVersion: 10, money: 0, level: 1, xp: 0, statPoints: 0, souls: 0, gems: 0, relicShards: 0, legacyMarks: 0, worldTier: 1,
     lifetimeClicks: 0, lifetimeKills: 0, lifetimeEnhances: 0, lifetimeEarned: 0, prestigeCount: 0, runClicks: 0, runKills: 0, runEarned: 0,
     clickLevels: {}, jobs: {}, training: {}, pointStats: {},
     owned: { weapons: [], armors: [], accessories: [] },
@@ -256,9 +258,17 @@ function baseIncome() {
   let value = DATA.jobs.reduce((sum, job) => sum + masteryTotal(job.income, state.jobs[job.id] || 0, JOB_MASTERY_STEP, JOB_MASTERY_MULTIPLIER), 0);
   if (state.gemUpgrades.businessLicense) value *= 1.5;
   value *= 1 + relicLevel("clock") * .15;
-  if (state.activeContract === "tycoon") value *= 2.5;
+  if (state.activeContract === "tycoon") value *= .5;
   return value;
 }
+
+function softCappedAutoIncome(rawIncome, clickIncome) {
+  if (rawIncome <= 0) return 0;
+  const cap = Math.max(1, clickIncome * AUTO_CAP_RATIO);
+  return cap * (1 - Math.exp(-rawIncome / cap));
+}
+
+function passiveIncome() { return softCappedAutoIncome(baseIncome() * incomeMultiplier(), clickValue()); }
 
 function incomeMultiplier() {
   let mult = 1 + (state.blessings.money || 0) * .1;
@@ -355,9 +365,9 @@ function moneyPop(x, y, amount, critical = false) {
 function renderTop() {
   const s = stats();
   $("#money").textContent = `${format(state.money)}원`;
-  $("#incomePerSecond").textContent = `+${format(baseIncome() * incomeMultiplier())}원 / 초`;
+  $("#incomePerSecond").textContent = `+${format(passiveIncome())}원 / 초`;
   $("#stickyMoney").textContent = `${format(state.money)}원`;
-  $("#stickyIncome").textContent = `+${format(baseIncome() * incomeMultiplier())}원 / 초`;
+  $("#stickyIncome").textContent = `+${format(passiveIncome())}원 / 초`;
   $("#clickIncome").textContent = `한 번에 +${format(clickValue())}원`;
   $("#levelLabel").textContent = `Lv.${state.level}`;
   $("#titleLabel").textContent = titleForLevel();
@@ -393,13 +403,23 @@ function renderClickUpgrades() {
 }
 
 function renderJobs() {
+  const currentRaw = baseIncome() * incomeMultiplier();
+  const currentEffective = passiveIncome();
+  const efficiency = currentRaw > 0 ? currentEffective / currentRaw * 100 : 100;
+  $("#autoEfficiency").textContent = currentRaw > 0 ? `현재 효율 ${Math.max(1, Math.round(efficiency))}% · ${format(currentEffective)}원/s` : "클릭 수익이 오르면 자동 한도도 상승합니다";
   $("#jobsList").innerHTML = DATA.jobs.map((job, index) => {
     const count = state.jobs[job.id] || 0;
     const price = priceOf(job.price, count, JOB_PRICE_GROWTH);
-    const nextIncome = masteryGain(job.income, count, JOB_MASTERY_STEP, JOB_MASTERY_MULTIPLIER) * incomeMultiplier() * (state.gemUpgrades.businessLicense ? 1.5 : 1);
+    let rawGain = masteryGain(job.income, count, JOB_MASTERY_STEP, JOB_MASTERY_MULTIPLIER);
+    if (state.gemUpgrades.businessLicense) rawGain *= 1.5;
+    rawGain *= 1 + relicLevel("clock") * .15;
+    if (state.activeContract === "tycoon") rawGain *= .5;
+    rawGain *= incomeMultiplier();
+    const nextIncome = softCappedAutoIncome(currentRaw + rawGain, clickValue()) - currentEffective;
+    const gainText = nextIncome >= 1 ? format(nextIncome) : nextIncome.toFixed(2);
     const locked = index > 1 && !(state.jobs[DATA.jobs[index - 1].id] || 0) && state.money < job.price;
     const masteryLeft = JOB_MASTERY_STEP - count % JOB_MASTERY_STEP;
-    return itemCard(job.icon, job.name, `다음 구매: 초당 +${format(nextIncome)}원`, `${count}개 · 숙련 3배까지 ${masteryLeft}개 · 회수 ${Math.ceil(price / Math.max(1, nextIncome))}초`, price, "buy-job", job.id, locked);
+    return itemCard(job.icon, job.name, `실제 증가: 초당 +${gainText}원`, `${count}개 · 자동수익 소프트캡 적용 · 회수 ${Math.ceil(price / Math.max(.01, nextIncome))}초`, price, "buy-job", job.id, locked);
   }).join("");
 }
 
@@ -589,9 +609,10 @@ function renderProfile() {
   const accMult = acc ? accessoryMultiplier(acc.id) : 1;
   const overallIncome = (incomeMultiplier() - 1) * 100;
   const clickSpecial = (state.gemUpgrades.goldenGlove ? 1.5 : 1) * (1 + (state.legacyUpgrades.hands || 0) * .15 + relicLevel("thimble") * .15) * (state.activeContract === "labor" ? 4 : state.activeContract === "tycoon" ? 2.5 : 1);
-  const autoSpecial = (state.gemUpgrades.businessLicense ? 1.5 : 1) * (1 + relicLevel("clock") * .15) * (state.activeContract === "tycoon" ? 2.5 : 1);
+  const autoSpecial = (state.gemUpgrades.businessLicense ? 1.5 : 1) * (1 + relicLevel("clock") * .15) * (state.activeContract === "tycoon" ? .5 : 1);
   const clickBonus = ((1 + overallIncome / 100) * clickSpecial - 1) * 100;
-  const autoBonus = ((1 + overallIncome / 100) * autoSpecial - 1) * 100;
+  const autoRaw = baseIncome() * incomeMultiplier();
+  const autoBonus = autoRaw > 0 ? passiveIncome() / autoRaw * 100 : 100;
   const baseAttackBonus = (state.blessings.attack || 0) * .1 + (state.gemUpgrades.heroSeal ? .25 : 0) + (acc?.attackPercent || 0) * accMult;
   const baseHealthBonus = (state.blessings.health || 0) * .1 + (state.gemUpgrades.heroSeal ? .25 : 0) + (acc?.healthPercent || 0) * accMult;
   const attackBonus = ((1 + baseAttackBonus) * (1 + (state.legacyUpgrades.warrior || 0) * .1 + relicLevel("fang") * .1) * (state.activeContract === "labor" ? .65 : 1) - 1) * 100;
@@ -632,12 +653,12 @@ function renderProfile() {
   ]);
   $("#profileTotals").innerHTML = [
     ["⚔ 최종 공격력",format(s.attack)],["♥ 최종 체력",format(s.health)],["◆ 최종 방어력",format(s.defense)],["✦ 최종 행운",format(s.luck)],
-    ["☝ 클릭 수익",`${format(clickValue())}원`],["⏱ 자동수익",`${format(baseIncome()*incomeMultiplier())}원/s`]
+    ["☝ 클릭 수익",`${format(clickValue())}원`],["⏱ 자동수익",`${format(passiveIncome())}원/s`]
   ].map(([label,value])=>`<div><span>${label}</span><b>${value}</b></div>`).join("");
   const rows = [
     ["🪙","전체 수익",incomeSources,overallIncome],
     ["☝️","클릭 수익",joinSources([incomeSources === "적용 효과 없음" ? "" : incomeSources,state.gemUpgrades.goldenGlove?"황금 장갑 +50%":"",state.legacyUpgrades.hands?`전설의 손 +${state.legacyUpgrades.hands*15}%`:"",relicLevel("thimble")?`황금 골무 +${relicLevel("thimble")*15}%`:"",state.activeContract==="labor"?"맨손 노동왕 ×4":"",state.activeContract==="tycoon"?"무일푼 재벌 ×2.5":""]),clickBonus],
-    ["⏱️","자동 수익",joinSources([incomeSources === "적용 효과 없음" ? "" : incomeSources,state.gemUpgrades.businessLicense?"사업 허가증 +50%":"",relicLevel("clock")?`멈춘 시계 +${relicLevel("clock")*15}%`:"",state.activeContract==="tycoon"?"무일푼 재벌 ×2.5":""]),autoBonus],
+    ["⏱️","자동 전환 효율",joinSources([`클릭 1회 수익의 최대 ${AUTO_CAP_RATIO*100}%/초`,state.gemUpgrades.businessLicense?"사업 허가증 +50%":"",relicLevel("clock")?`멈춘 시계 +${relicLevel("clock")*15}%`:"",state.activeContract==="tycoon"?"무일푼 재벌 ×0.5":""]),autoBonus],
     ["⚔️","공격력",attackSources,attackBonus],
     ["❤️","체력",healthSources,healthBonus],
     ["🏹","사냥 보상",rewardSources,rewardBonus],
@@ -1226,7 +1247,7 @@ function buyGemItem(id) {
   if (item.unique) {
     state.gemUpgrades[id] = true;
   } else if (id === "timeWarp") {
-    const reward = Math.max(clickValue() * 100, baseIncome() * incomeMultiplier() * 600);
+    const reward = Math.max(clickValue() * 100, passiveIncome() * 600);
     earn(reward);
     showToast(`시간 가속! +${format(reward)}원`);
   } else if (id === "goldChest") {
@@ -1258,7 +1279,7 @@ function hydrateSave(parsed, includeOffline = false) {
   const base = freshState();
   const merged = { ...base, ...parsed };
   const incomingVersion = Number(parsed.balanceVersion || 0);
-  merged.balanceVersion = 9;
+  merged.balanceVersion = 10;
   ["clickLevels","jobs","training","pointStats","enhancements","enhancePity","blessings","gemUpgrades","legacyUpgrades","relics","completedContracts","claimedGemPackages","claimedChallenges","discovered","kills","materials","equipped"].forEach(key => merged[key] = { ...base[key], ...(parsed[key] || {}) });
   merged.owned = { ...base.owned, ...(parsed.owned || {}) };
   merged.village = { ...base.village, ...(parsed.village || {}) };
@@ -1317,12 +1338,20 @@ function hydrateSave(parsed, includeOffline = false) {
     let offlineIncome = DATA.jobs.reduce((sum, job) => sum + masteryTotal(job.income, merged.jobs[job.id] || 0, JOB_MASTERY_STEP, JOB_MASTERY_MULTIPLIER), 0);
     if (merged.gemUpgrades.businessLicense) offlineIncome *= 1.5;
     if (merged.equippedRelics.includes("clock")) offlineIncome *= 1 + (merged.relics.clock || 0) * .15;
-    if (merged.activeContract === "tycoon") offlineIncome *= 2.5;
+    if (merged.activeContract === "tycoon") offlineIncome *= .5;
     let offlineMultiplier = 1 + (merged.blessings.money || 0) * .1;
     const accessory = DATA.accessories.find(item => item.id === merged.equipped.accessory);
     if (accessory?.income) offlineMultiplier += accessory.income * (1 + (merged.enhancements[accessory.id] || 0) * .05);
     offlineMultiplier *= 1 + (merged.legacyUpgrades.fortune || 0) * .1;
-    const offline = away * offlineIncome * offlineMultiplier * (1 + merged.village.inn * .05);
+    let offlineClick = 1 + DATA.clickUpgrades.reduce((sum, item) => sum + masteryTotal(item.amount, merged.clickLevels[item.id] || 0, CLICK_MASTERY_STEP, CLICK_MASTERY_MULTIPLIER), 0);
+    if (merged.gemUpgrades.goldenGlove) offlineClick *= 1.5;
+    offlineClick *= 1 + (merged.legacyUpgrades.hands || 0) * .15;
+    if (merged.equippedRelics.includes("thimble")) offlineClick *= 1 + (merged.relics.thimble || 0) * .15;
+    if (merged.activeContract === "labor") offlineClick *= 4;
+    if (merged.activeContract === "tycoon") offlineClick *= 2.5;
+    offlineClick *= offlineMultiplier;
+    const cappedOfflinePerSecond = softCappedAutoIncome(offlineIncome * offlineMultiplier, offlineClick);
+    const offline = away * cappedOfflinePerSecond * OFFLINE_INCOME_EFFICIENCY * (1 + merged.village.inn * .05);
     if (offline >= 1) {
       merged.money += offline;
       merged.totalEarned += offline;
@@ -1494,7 +1523,7 @@ function closeEvent() {
 function claimEvent() {
   if (!eventState) return;
   if (eventState.type === "pig") {
-    const reward = Math.max(100, baseIncome() * incomeMultiplier() * 300);
+    const reward = Math.max(100, passiveIncome() * 300);
     earn(reward);
     showToast(`황금돼지 포획! +${format(reward)}원`);
   } else if (Math.random() < .01) {
@@ -1610,7 +1639,7 @@ setInterval(() => {
   const now = performance.now();
   const delta = Math.min(1, (now - lastTick) / 1000);
   lastTick = now;
-  const passive = baseIncome() * incomeMultiplier() * delta;
+  const passive = passiveIncome() * delta;
   if (passive > 0) {
     state.money += passive;
     state.totalEarned += passive;
