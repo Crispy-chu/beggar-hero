@@ -858,7 +858,7 @@ function renderExpedition() {
     return `<article class="expedition-milestone ${claimed ? "claimed" : ""} ${unlocked ? "unlocked" : "locked"}"><span>${item.icon}</span><div><small>심도 ${item.depth} 정복</small><b>${item.name}</b><em>${item.text}</em></div><button data-action="claim-expedition-milestone" data-id="${item.id}" ${!unlocked || claimed ? "disabled" : ""}>${claimed ? "수령 완료" : unlocked ? "보상 받기" : `${clearedDepth} / ${item.depth}`}</button></article>`;
   }).join("");
   const hasMilestoneReward = EXPEDITION_MILESTONES.some(item => clearedDepth >= item.depth && !state.claimedExpeditionMilestones[item.id]);
-  $("#expeditionNavBadge").hidden = !run.active && !hasMilestoneReward;
+  $("#expeditionNavBadge").hidden = !run.awaitingChoice && !hasMilestoneReward;
   renderRelics();
 }
 
