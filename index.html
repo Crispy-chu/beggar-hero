@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <meta name="theme-color" content="#14110f">
   <title>무한 거지 용사</title>
-  <link rel="stylesheet" href="style.css?v=20260622-2">
+  <link rel="stylesheet" href="style.css?v=20260623-1">
 </head>
 <body>
   <div class="app-shell">
@@ -163,6 +163,7 @@
         <div class="expedition-route" id="expeditionRoute"></div>
         <div class="expedition-intel">
           <div><small>현재 위험도</small><b id="expeditionThreat">적 체력 ×1.00</b></div>
+          <div><small>전술 상태</small><b id="expeditionTactics">카드 선택으로 변화</b></div>
           <div><small>지금 철수</small><b id="expeditionRetreatReward">🔮 0개</b></div>
           <div><small>10층 정복</small><b id="expeditionClearReward">🔮 0개</b></div>
         </div>
@@ -174,6 +175,7 @@
         </div>
         <p class="expedition-log" id="expeditionLog">10개 층을 연속으로 돌파하세요.</p>
         <div class="expedition-buffs" id="expeditionBuffs"></div>
+        <div class="expedition-run-stats" id="expeditionRunStats"></div>
         <div class="expedition-choices" id="expeditionChoices" hidden></div>
         <button class="primary-button abyss-action" id="expeditionAction">🌀 새 원정 시작</button>
         <button class="expedition-abandon" id="expeditionAbandon" hidden>확보한 조각을 들고 철수</button>
@@ -319,6 +321,6 @@
   <div class="enhance-fx" id="enhanceFx" hidden>
     <div class="enhance-burst"></div><span id="enhanceFxIcon">✨</span><strong id="enhanceFxTitle">강화 성공!</strong><small id="enhanceFxText">장비가 더욱 강해졌습니다</small>
   </div>
-  <script src="app.js?v=20260622-2"></script>
+  <script src="app.js?v=20260623-1"></script>
 </body>
 </html>

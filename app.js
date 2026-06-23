@@ -115,12 +115,16 @@ const VILLAGE_BUILDINGS = [
 ];
 
 const EXPEDITION_BUFFS = [
-  { id: "power", icon: "⚔️", name: "광전사의 표식", text: "이번 원정 공격력 +25%" },
-  { id: "vitality", icon: "❤️", name: "거인의 심장", text: "최대 체력 +20% · 증가량만큼 회복" },
-  { id: "guard", icon: "🛡️", name: "철벽의 맹세", text: "받는 피해 -15%" },
-  { id: "crit", icon: "💥", name: "날카로운 감각", text: "크리티컬 확률 +10%" },
-  { id: "recovery", icon: "✨", name: "야영의 불씨", text: "최대 체력의 35% 즉시 회복" },
-  { id: "fortune", icon: "🔮", name: "탐욕의 나침반", text: "획득 유물 조각 +25%" }
+  { id: "power", icon: "⚔️", name: "광전사의 표식", text: "이번 원정 공격력 +25%", group: "attack" },
+  { id: "crit", icon: "💥", name: "날카로운 감각", text: "크리티컬 확률 +10%", group: "attack" },
+  { id: "ambush", icon: "🗡️", name: "선제 급습", text: "다음 전투 시작 시 적 체력 25% 감소", group: "attack" },
+  { id: "vitality", icon: "❤️", name: "거인의 심장", text: "최대 체력 +20% · 증가량만큼 회복", group: "defense" },
+  { id: "guard", icon: "🛡️", name: "철벽의 맹세", text: "받는 피해 -15%", group: "defense" },
+  { id: "ward", icon: "🧿", name: "수호 토템", text: "다음 2번 피격 피해 50% 감소", group: "defense" },
+  { id: "recovery", icon: "✨", name: "야영의 불씨", text: "최대 체력의 35% 즉시 회복", group: "defense" },
+  { id: "fortune", icon: "🔮", name: "탐욕의 나침반", text: "획득 유물 조각 +25%", group: "reward" },
+  { id: "greed", icon: "💰", name: "저주받은 금고", text: "유물 조각 +30% · 받는 피해 +8%", group: "reward", danger: true },
+  { id: "scout", icon: "🗺️", name: "심연 정찰", text: "다음 전투 적 체력·피해 -15%", group: "reward" }
 ];
 
 const EXPEDITION_MILESTONES = [
@@ -151,9 +155,13 @@ const RELICS = [
   { id: "idol", icon: "🗿", name: "탐욕의 우상", effect: "사냥 보상", per: 12 }
 ];
 
+function expeditionBuffTemplate() {
+  return EXPEDITION_BUFFS.reduce((buffs, item) => ({ ...buffs, [item.id]: 0 }), {});
+}
+
 function freshState() {
   return {
-    balanceVersion: 11, money: 0, level: 1, xp: 0, statPoints: 0, souls: 0, gems: 0, relicShards: 0, legacyMarks: 0, worldTier: 1,
+    balanceVersion: 12, money: 0, level: 1, xp: 0, statPoints: 0, souls: 0, gems: 0, relicShards: 0, legacyMarks: 0, worldTier: 1,
     lifetimeClicks: 0, lifetimeKills: 0, lifetimeEnhances: 0, lifetimeEarned: 0, prestigeCount: 0, runClicks: 0, runKills: 0, runEarned: 0,
     clickLevels: {}, jobs: {}, training: {}, pointStats: {},
     owned: { weapons: [], armors: [], accessories: [] },
@@ -162,7 +170,7 @@ function freshState() {
     activeContract: null, completedContracts: {},
     village: { forge: 0, inn: 0, guild: 0, museum: 0 },
     expeditionBest: 0, expeditionDepth: 1, expeditionRuns: 0, expeditionWins: 0, claimedExpeditionMilestones: {},
-    expedition: { active: false, depth: 1, floor: 1, buffs: { power: 0, vitality: 0, guard: 0, crit: 0, fortune: 0 }, playerHp: 0, enemyHp: 0, awaitingChoice: false, choices: [] },
+    expedition: { active: false, depth: 1, floor: 1, buffs: expeditionBuffTemplate(), playerHp: 0, enemyHp: 0, enemyMaxHp: 0, enemyWeakness: 0, awaitingChoice: false, choices: [], lastLog: "" },
     unlockedZone: 0, selectedZone: 0, selectedMonster: 0,
     miniDemonKills: 0, totalEarned: 0, lastSave: Date.now()
   };
@@ -756,12 +764,66 @@ function expeditionEnemy(floor = state.expedition.floor) {
   return { name, icon, health };
 }
 
+function expeditionChoice(id) { return EXPEDITION_BUFFS.find(item => item.id === id); }
+
+function generateExpeditionChoices() {
+  const groups = ["attack", "defense", "reward"];
+  const picks = [];
+  groups.forEach(group => {
+    const pool = EXPEDITION_BUFFS.filter(item => item.group === group && !picks.includes(item.id));
+    if (pool.length) picks.push(pool[Math.floor(Math.random() * pool.length)].id);
+  });
+  return picks.sort(() => Math.random() - .5);
+}
+
+function prepareExpeditionEnemy(floor, prefix = "") {
+  const run = state.expedition;
+  const enemy = expeditionEnemy(floor);
+  const logs = prefix ? [prefix] : [];
+  let maxHp = enemy.health;
+  let currentHp = maxHp;
+  run.enemyWeakness = 0;
+  if ((run.buffs.scout || 0) > 0) {
+    run.buffs.scout = Math.max(0, run.buffs.scout - 1);
+    maxHp = Math.max(1, Math.floor(maxHp * .85));
+    currentHp = maxHp;
+    run.enemyWeakness = .15;
+    logs.push("정찰 성공: 이번 층 적 체력·피해 -15%.");
+  }
+  if ((run.buffs.ambush || 0) > 0) {
+    run.buffs.ambush = Math.max(0, run.buffs.ambush - 1);
+    currentHp = Math.max(1, Math.floor(currentHp * .75));
+    logs.push("선제 급습 발동: 적 체력 25%를 먼저 깎았습니다.");
+  }
+  run.enemyMaxHp = maxHp;
+  run.enemyHp = currentHp;
+  run.lastLog = logs.join(" ");
+}
+
+function expeditionTacticStats(run = state.expedition) {
+  const rewardBonus = (run.buffs.fortune || 0) * 25 + (run.buffs.greed || 0) * 30;
+  const riskBonus = (run.buffs.greed || 0) * 8;
+  return {
+    attack: (run.buffs.power || 0) * 25,
+    crit: (run.buffs.crit || 0) * 10,
+    guard: (run.buffs.guard || 0) * 15,
+    rewardBonus,
+    riskBonus,
+    ward: run.buffs.ward || 0,
+    enemyWeakness: Math.round((run.enemyWeakness || 0) * 100)
+  };
+}
+
 function expeditionIncomingDamage() {
   const s = stats();
   const base = Math.max(1, Math.floor(s.health * (.04 + state.expedition.floor * .005) - s.defense * .35));
   const depth = state.expedition.depth || state.expeditionDepth || 1;
   const elite = state.expedition.floor === 10 ? 1.25 : state.expedition.floor === 5 ? 1.12 : 1;
-  return Math.max(1, Math.floor(base * Math.pow(1.35, depth - 1) * elite * Math.max(.25, 1 - (state.expedition.buffs.guard || 0) * .15)));
+  const guard = Math.max(.25, 1 - (state.expedition.buffs.guard || 0) * .15);
+  const greedRisk = 1 + (state.expedition.buffs.greed || 0) * .08;
+  const ward = (state.expedition.buffs.ward || 0) > 0 ? .5 : 1;
+  const scouted = Math.max(.5, 1 - (state.expedition.enemyWeakness || 0));
+  return Math.max(1, Math.floor(base * Math.pow(1.35, depth - 1) * elite * guard * greedRisk * ward * scouted));
 }
 
 function expeditionEntryCost() { return Math.floor(Math.max(250000 * Math.pow(state.expeditionDepth, 2), clickValue() * 25 * state.expeditionDepth)); }
@@ -810,6 +872,7 @@ function renderExpedition() {
   const run = state.expedition;
   const enemy = expeditionEnemy();
   const maxHp = expeditionMaxHp();
+  const tacticStats = expeditionTacticStats(run);
   const clearedDepth = Math.max(0, state.expeditionDepth - 1);
   $("#expeditionFloor").textContent = run.active ? `${run.floor} / 10층` : "대기 중";
   $("#expeditionBest").textContent = `${state.expeditionBest}층`;
@@ -826,24 +889,37 @@ function renderExpedition() {
   const previewDepth = run.active ? run.depth : state.expeditionDepth;
   const completed = run.active ? Math.max(0, run.floor - 1) : 0;
   const fortune = run.active ? (run.buffs.fortune || 0) : 0;
+  const greed = run.active ? (run.buffs.greed || 0) : 0;
   $("#expeditionThreat").textContent = `체력 ×${Math.pow(1.8, previewDepth - 1).toFixed(2)} · 피해 ×${Math.pow(1.35, previewDepth - 1).toFixed(2)}`;
-  $("#expeditionRetreatReward").textContent = `🔮 ${format(expeditionRewardAt(previewDepth, completed, false, fortune))}개`;
-  $("#expeditionClearReward").textContent = `🔮 ${format(expeditionRewardAt(previewDepth, 10, true, fortune))}개`;
+  $("#expeditionTactics").textContent = run.active ? `보상 +${tacticStats.rewardBonus}% · 위험 +${tacticStats.riskBonus}%` : "카드 선택으로 변화";
+  $("#expeditionRetreatReward").textContent = `🔮 ${format(expeditionRewardAt(previewDepth, completed, false, fortune, greed))}개`;
+  $("#expeditionClearReward").textContent = `🔮 ${format(expeditionRewardAt(previewDepth, 10, true, fortune, greed))}개`;
   $("#expeditionEnemyIcon").textContent = run.active ? enemy.icon : "🌀";
   $("#expeditionEnemyName").textContent = run.active ? enemy.name : "심연의 문";
   const playerHp = run.active ? Math.max(0, run.playerHp) : maxHp;
-  const enemyHp = run.active ? Math.max(0, run.enemyHp) : enemy.health;
+  const enemyMaxHp = run.active ? Math.max(1, run.enemyMaxHp || enemy.health) : enemy.health;
+  const enemyHp = run.active ? Math.max(0, run.enemyHp) : enemyMaxHp;
   $("#expeditionPlayerHpBar").style.width = `${Math.min(100, playerHp / maxHp * 100)}%`;
   $("#expeditionPlayerHpText").textContent = `${format(playerHp)} / ${format(maxHp)}`;
-  $("#expeditionEnemyHpBar").style.width = `${Math.min(100, enemyHp / enemy.health * 100)}%`;
-  $("#expeditionEnemyHpText").textContent = run.active ? `${format(enemyHp)} / ${format(enemy.health)}` : "도전 전";
+  $("#expeditionEnemyHpBar").style.width = `${Math.min(100, enemyHp / enemyMaxHp * 100)}%`;
+  $("#expeditionEnemyHpText").textContent = run.active ? `${format(enemyHp)} / ${format(enemyMaxHp)}` : "도전 전";
   const buffs = EXPEDITION_BUFFS.filter(buff => run.buffs[buff.id]).map(buff => `${buff.icon} ${buff.name} ${run.buffs[buff.id] > 1 ? `×${run.buffs[buff.id]}` : ""}`);
   $("#expeditionBuffs").innerHTML = buffs.length ? buffs.map(text => `<span>${text}</span>`).join("") : "<small>아직 획득한 원정 효과가 없습니다.</small>";
-  $("#expeditionLog").textContent = run.active ? (run.awaitingChoice ? `${run.floor}층 돌파! 다음 층에 가져갈 힘을 고르세요.` : `심도 ${run.depth} · ${enemy.name}와 자동 전투 중입니다. 다른 탭으로 이동하면 원정은 일시정지됩니다.`) : `심도 ${state.expeditionDepth} 도전. 5층과 10층은 정예 구간이며, 실패해도 돌파한 층의 조각은 확보합니다.`;
+  $("#expeditionRunStats").innerHTML = [
+    ["⚔️", "공격", `+${tacticStats.attack}%`],
+    ["💥", "치명", `+${tacticStats.crit}%`],
+    ["🛡️", "피해감소", `+${tacticStats.guard}%`],
+    ["🔮", "보상", `+${tacticStats.rewardBonus}%`],
+    ["☠️", "위험", `+${tacticStats.riskBonus}%`],
+    ["🧿", "토템", `${tacticStats.ward}회`],
+    ["🗺️", "정찰", tacticStats.enemyWeakness ? `적 -${tacticStats.enemyWeakness}%` : "없음"]
+  ].map(([icon, label, value]) => `<span><i>${icon}</i><small>${label}</small><b>${value}</b></span>`).join("");
+  $("#expeditionLog").textContent = run.active ? (run.awaitingChoice ? `${run.floor}층 돌파! 공격 / 생존 / 욕심 카드 중 하나를 고르세요.` : (run.lastLog || `심도 ${run.depth} · ${enemy.name}와 자동 전투 중입니다. 다른 탭으로 이동하면 원정은 일시정지됩니다.`)) : `심도 ${state.expeditionDepth} 도전. 카드 선택으로 이번 원정만의 빌드를 만들고, 위험할 땐 철수해서 조각을 챙기세요.`;
   $("#expeditionChoices").hidden = !run.awaitingChoice;
   $("#expeditionChoices").innerHTML = (run.choices || []).map(id => {
-    const buff = EXPEDITION_BUFFS.find(item => item.id === id);
-    return `<button data-action="choose-expedition" data-id="${id}"><span>${buff.icon}</span><b>${buff.name}</b><small>${buff.text}</small></button>`;
+    const buff = expeditionChoice(id);
+    if (!buff) return "";
+    return `<button class="${buff.danger ? "danger" : ""}" data-action="choose-expedition" data-id="${id}"><span>${buff.icon}</span><b>${buff.name}</b><small>${buff.text}</small></button>`;
   }).join("");
   $("#expeditionAction").hidden = run.awaitingChoice;
   const entryCost = expeditionEntryCost();
@@ -867,21 +943,21 @@ function startExpedition() {
   const entryCost = expeditionEntryCost();
   if (!spend(entryCost)) return showToast(`원정 입장에 ${format(entryCost)}원이 필요합니다.`);
   if (battle.active) stopBattle("심연 원정을 시작해 일반 사냥이 중단되었습니다.");
-  state.expedition = { active: true, depth: state.expeditionDepth, floor: 1, buffs: { power: 0, vitality: 0, guard: 0, crit: 0, fortune: 0 }, playerHp: stats().health, enemyHp: 0, awaitingChoice: false, choices: [] };
+  state.expedition = { active: true, depth: state.expeditionDepth, floor: 1, buffs: expeditionBuffTemplate(), playerHp: stats().health, enemyHp: 0, enemyMaxHp: 0, enemyWeakness: 0, awaitingChoice: false, choices: [], lastLog: "심연의 문으로 내려갑니다. 첫 전투를 버티면 전술 카드를 고를 수 있습니다." };
   state.expeditionRuns = (state.expeditionRuns || 0) + 1;
-  state.expedition.enemyHp = expeditionEnemy(1).health;
+  prepareExpeditionEnemy(1, state.expedition.lastLog);
   saveGame(false);
   renderTop();
   renderExpedition();
 }
 
-function expeditionRewardAt(depth, completed, victory = false, fortune = 0) {
+function expeditionRewardAt(depth, completed, victory = false, fortune = 0, greed = 0) {
   if (completed <= 0) return 0;
   const base = (completed + (victory ? 5 : 0)) * (1 + (Math.max(1, depth) - 1) * .75);
-  return Math.max(1, Math.floor(base * (1 + fortune * .25) * (1 + (state.village.guild || 0) * .1) * (1 + relicLevel("map") * .2)));
+  return Math.max(1, Math.floor(base * (1 + fortune * .25 + greed * .3) * (1 + (state.village.guild || 0) * .1) * (1 + relicLevel("map") * .2)));
 }
 
-function expeditionReward(completed, victory = false) { return expeditionRewardAt(state.expedition.depth || 1, completed, victory, state.expedition.buffs.fortune || 0); }
+function expeditionReward(completed, victory = false) { return expeditionRewardAt(state.expedition.depth || 1, completed, victory, state.expedition.buffs.fortune || 0, state.expedition.buffs.greed || 0); }
 
 function claimExpeditionMilestone(id) {
   const item = EXPEDITION_MILESTONES.find(entry => entry.id === id);
@@ -909,6 +985,11 @@ function finishExpedition(victory, abandoned = false) {
   state.expedition.active = false;
   state.expedition.awaitingChoice = false;
   state.expedition.choices = [];
+  state.expedition.buffs = expeditionBuffTemplate();
+  state.expedition.playerHp = 0;
+  state.expedition.enemyMaxHp = 0;
+  state.expedition.enemyWeakness = 0;
+  state.expedition.lastLog = victory ? "심연 정복 완료!" : "원정 종료.";
   saveGame(false);
   renderExpedition();
   renderMore();
@@ -919,6 +1000,7 @@ function expeditionTurn() {
   const run = state.expedition;
   if (!run.active || run.awaitingChoice) return;
   const s = stats();
+  const enemy = expeditionEnemy(run.floor);
   const critChance = Math.min(.9, .05 + s.luck * .002 + (run.buffs.crit || 0) * .1);
   const critical = Math.random() < critChance;
   const damage = Math.max(1, Math.floor(s.attack * (1 + (run.buffs.power || 0) * .25) * (.9 + Math.random() * .2) * (critical ? 2 : 1)));
@@ -926,14 +1008,19 @@ function expeditionTurn() {
   if (run.enemyHp <= 0) {
     state.expeditionBest = Math.max(state.expeditionBest, run.floor);
     renderMore();
+    run.lastLog = `${critical ? "치명타! " : ""}${enemy.name}에게 ${format(damage)} 피해를 주고 ${run.floor}층을 돌파했습니다.`;
     if (run.floor >= 10) return finishExpedition(true);
     run.enemyHp = 0;
     run.awaitingChoice = true;
-    run.choices = [...EXPEDITION_BUFFS].sort(() => Math.random() - .5).slice(0, 3).map(buff => buff.id);
+    run.choices = generateExpeditionChoices();
     saveGame(false);
     return renderExpedition();
   }
-  run.playerHp -= expeditionIncomingDamage();
+  const warded = (run.buffs.ward || 0) > 0;
+  const incoming = expeditionIncomingDamage();
+  if (warded) run.buffs.ward = Math.max(0, run.buffs.ward - 1);
+  run.playerHp -= incoming;
+  run.lastLog = `${critical ? "치명타! " : ""}${format(damage)} 피해를 주고 ${format(incoming)} 피해를 받았습니다.${warded ? " 수호 토템이 피해를 반으로 막았습니다." : ""}`;
   if (run.playerHp <= 0) {
     run.playerHp = 0;
     return finishExpedition(false);
@@ -944,17 +1031,26 @@ function expeditionTurn() {
 function chooseExpeditionBuff(id) {
   const run = state.expedition;
   if (!run.active || !run.awaitingChoice || !run.choices.includes(id)) return;
+  const choice = expeditionChoice(id);
+  if (!choice) return;
+  let choiceLog = `${choice.icon} ${choice.name} 선택.`;
   if (id === "recovery") {
     run.playerHp = Math.min(expeditionMaxHp(), run.playerHp + expeditionMaxHp() * .35);
+    choiceLog += " 체력을 회복했습니다.";
   } else if (id === "vitality") {
     const oldMax = expeditionMaxHp();
     run.buffs.vitality = (run.buffs.vitality || 0) + 1;
     run.playerHp += expeditionMaxHp() - oldMax;
+    choiceLog += " 최대 체력이 늘었습니다.";
+  } else if (id === "ward") {
+    run.buffs.ward = (run.buffs.ward || 0) + 2;
+    choiceLog += " 다음 2번 피격을 크게 줄입니다.";
   } else {
     run.buffs[id] = (run.buffs[id] || 0) + 1;
+    if (id === "greed") choiceLog += " 보상은 커지지만 이번 원정의 피해도 늘어납니다.";
   }
   run.floor++;
-  run.enemyHp = expeditionEnemy(run.floor).health;
+  prepareExpeditionEnemy(run.floor, choiceLog);
   run.awaitingChoice = false;
   run.choices = [];
   saveGame(false);
@@ -1361,10 +1457,17 @@ function hydrateSave(parsed, includeOffline = false) {
   merged.expedition.floor = Math.max(1, Math.min(10, Math.floor(Number(merged.expedition.floor) || 1)));
   merged.expedition.playerHp = Math.max(0, Number(merged.expedition.playerHp) || 0);
   merged.expedition.enemyHp = Math.max(0, Number(merged.expedition.enemyHp) || 0);
+  merged.expedition.enemyMaxHp = Math.max(0, Number(merged.expedition.enemyMaxHp) || 0);
+  merged.expedition.enemyWeakness = Math.max(0, Math.min(.5, Number(merged.expedition.enemyWeakness) || 0));
+  merged.expedition.lastLog = typeof merged.expedition.lastLog === "string" ? merged.expedition.lastLog.slice(0, 180) : "";
   if (merged.expedition.active && (!merged.expedition.playerHp || !merged.expedition.enemyHp)) merged.expedition.active = false;
   if (!merged.expedition.active) {
     merged.expedition.floor = 1;
+    merged.expedition.buffs = expeditionBuffTemplate();
+    merged.expedition.playerHp = 0;
     merged.expedition.enemyHp = 0;
+    merged.expedition.enemyMaxHp = 0;
+    merged.expedition.enemyWeakness = 0;
     merged.expedition.awaitingChoice = false;
     merged.expedition.choices = [];
   }
