@@ -134,6 +134,12 @@ const EXPEDITION_MILESTONES = [
   { id: "depth10", depth: 10, icon: "👑", name: "심연 정복자", reward: { gems: 500, souls: 3 }, text: "보석 500개 · 영혼석 3개" }
 ];
 
+const ABYSS_TRAINING = [
+  { id: "blade", icon: "⚔️", name: "심연 검술", effect: "원정 공격력", per: 7, base: 18, growth: 1.32, max: 25 },
+  { id: "heart", icon: "❤️", name: "심연 생존술", effect: "원정 체력", per: 7, base: 18, growth: 1.32, max: 25 },
+  { id: "barrier", icon: "🛡️", name: "심연 방벽", effect: "원정 피해 감소", per: 4, base: 24, growth: 1.36, max: 20 }
+];
+
 const LIFE_CONTRACTS = [
   { id: "labor", icon: "☝️", name: "맨손 노동왕", rule: "클릭 수익 4배 · 공격력과 체력 35% 감소", goal: "이번 생 1,000회 클릭 + 미니마왕 처치", metric: state => [state.runClicks || 0, 1000] },
   { id: "hunter", icon: "🏹", name: "현상금 사냥꾼", rule: "사냥 보상 5배 · 몬스터 체력 50%, 공격력 35% 증가", goal: "이번 생 몬스터 40마리 + 미니마왕 처치", metric: state => [state.runKills || 0, 40] },
@@ -149,25 +155,30 @@ const LEGACY_UPGRADES = [
 const RELICS = [
   { id: "thimble", icon: "🧿", name: "황금 골무", effect: "클릭 수익", per: 15 },
   { id: "clock", icon: "⏱️", name: "멈춘 시계", effect: "자동 수익", per: 15 },
-  { id: "fang", icon: "🦷", name: "심연의 송곳니", effect: "공격력", per: 10 },
-  { id: "shell", icon: "🐚", name: "고대의 껍질", effect: "체력", per: 10 },
-  { id: "map", icon: "🗺️", name: "찢어진 심연 지도", effect: "원정 유물 조각", per: 20 },
-  { id: "idol", icon: "🗿", name: "탐욕의 우상", effect: "사냥 보상", per: 12 }
+  { id: "fang", icon: "🦷", name: "심연의 송곳니", effect: "공격력", per: 18 },
+  { id: "shell", icon: "🐚", name: "고대의 껍질", effect: "체력", per: 18 },
+  { id: "map", icon: "🗺️", name: "찢어진 심연 지도", effect: "원정 유물 조각", per: 35 },
+  { id: "idol", icon: "🗿", name: "탐욕의 우상", effect: "사냥 보상", per: 15 }
 ];
 
 function expeditionBuffTemplate() {
   return EXPEDITION_BUFFS.reduce((buffs, item) => ({ ...buffs, [item.id]: 0 }), {});
 }
 
+function relicDef(id) { return RELICS.find(item => item.id === id); }
+function relicBonus(id) { return relicLevel(id) * ((relicDef(id)?.per || 0) / 100); }
+function relicSlotLimitForDepth(depth) { return Math.min(4, 3 + Math.floor(Math.max(0, (depth || 1) - 2) / 4)); }
+function relicSlotLimit() { return relicSlotLimitForDepth(state.expeditionDepth); }
+
 function freshState() {
   return {
-    balanceVersion: 12, money: 0, level: 1, xp: 0, statPoints: 0, souls: 0, gems: 0, relicShards: 0, legacyMarks: 0, worldTier: 1,
+    balanceVersion: 13, money: 0, level: 1, xp: 0, statPoints: 0, souls: 0, gems: 0, relicShards: 0, legacyMarks: 0, worldTier: 1,
     lifetimeClicks: 0, lifetimeKills: 0, lifetimeEnhances: 0, lifetimeEarned: 0, prestigeCount: 0, runClicks: 0, runKills: 0, runEarned: 0,
     clickLevels: {}, jobs: {}, training: {}, pointStats: {},
     owned: { weapons: [], armors: [], accessories: [] },
     equipped: { weapon: null, armor: null, accessory: null },
     enhancements: {}, enhancePity: {}, blessings: {}, gemUpgrades: {}, legacyUpgrades: {}, relics: {}, equippedRelics: [], claimedGemPackages: {}, claimedChallenges: {}, discovered: {}, kills: {}, materials: {},
-    activeContract: null, completedContracts: {},
+    activeContract: null, completedContracts: {}, abyssTraining: {},
     village: { forge: 0, inn: 0, guild: 0, museum: 0 },
     expeditionBest: 0, expeditionDepth: 1, expeditionRuns: 0, expeditionWins: 0, claimedExpeditionMilestones: {},
     expedition: { active: false, depth: 1, floor: 1, buffs: expeditionBuffTemplate(), playerHp: 0, enemyHp: 0, enemyMaxHp: 0, enemyWeakness: 0, awaitingChoice: false, choices: [], lastLog: "" },
@@ -263,7 +274,7 @@ function clickValue() {
   let value = 1;
   DATA.clickUpgrades.forEach(item => value += masteryTotal(item.amount, state.clickLevels[item.id] || 0, CLICK_MASTERY_STEP, CLICK_MASTERY_MULTIPLIER));
   if (state.gemUpgrades.goldenGlove) value *= 1.5;
-  value *= 1 + (state.legacyUpgrades.hands || 0) * .15 + relicLevel("thimble") * .15;
+  value *= 1 + (state.legacyUpgrades.hands || 0) * .15 + relicBonus("thimble");
   if (state.activeContract === "labor") value *= 4;
   if (state.activeContract === "tycoon") value *= 2.5;
   return value * incomeMultiplier();
@@ -272,7 +283,7 @@ function clickValue() {
 function baseIncome() {
   let value = DATA.jobs.reduce((sum, job) => sum + masteryTotal(job.income, state.jobs[job.id] || 0, JOB_MASTERY_STEP, JOB_MASTERY_MULTIPLIER), 0);
   if (state.gemUpgrades.businessLicense) value *= 1.5;
-  value *= 1 + relicLevel("clock") * .15;
+  value *= 1 + relicBonus("clock");
   if (state.activeContract === "tycoon") value *= .5;
   return value;
 }
@@ -298,7 +309,7 @@ function rewardMultiplier() {
   const acc = getItem("accessories", state.equipped.accessory);
   if (acc?.reward) mult += acc.reward * accessoryMultiplier(acc.id);
   mult += discoveredCount() * .01 * (1 + (state.village.museum || 0) * .1);
-  mult *= 1 + relicLevel("idol") * .12;
+  mult *= 1 + relicBonus("idol");
   if (state.activeContract === "hunter") mult *= 5;
   if (state.activeContract === "tycoon") mult *= .2;
   return mult;
@@ -325,8 +336,8 @@ function stats() {
   const healthBonus = (state.blessings.health || 0) * .1 + (state.gemUpgrades.heroSeal ? .25 : 0) + (acc?.healthPercent || 0) * (acc ? accessoryMultiplier(acc.id) : 1);
   attack *= 1 + attackBonus;
   health *= 1 + healthBonus;
-  attack *= 1 + (state.legacyUpgrades.warrior || 0) * .1 + relicLevel("fang") * .1;
-  health *= 1 + (state.legacyUpgrades.warrior || 0) * .1 + relicLevel("shell") * .1;
+  attack *= 1 + (state.legacyUpgrades.warrior || 0) * .1 + relicBonus("fang");
+  health *= 1 + (state.legacyUpgrades.warrior || 0) * .1 + relicBonus("shell");
   if (state.activeContract === "labor") { attack *= .65; health *= .65; }
   return { attack: Math.floor(attack), health: Math.floor(health), defense: Math.floor(defense), luck: Math.floor(luck) };
 }
@@ -427,7 +438,7 @@ function renderJobs() {
     const price = priceOf(job.price, count, JOB_PRICE_GROWTH);
     let rawGain = masteryGain(job.income, count, JOB_MASTERY_STEP, JOB_MASTERY_MULTIPLIER);
     if (state.gemUpgrades.businessLicense) rawGain *= 1.5;
-    rawGain *= 1 + relicLevel("clock") * .15;
+    rawGain *= 1 + relicBonus("clock");
     if (state.activeContract === "tycoon") rawGain *= .5;
     rawGain *= incomeMultiplier();
     const nextIncome = softCappedAutoIncome(currentRaw + rawGain, clickValue()) - currentEffective;
@@ -538,6 +549,7 @@ function renderMore() {
   const canPrestige = state.miniDemonKills > 0;
   const reward = prestigeReward();
   $("#prestigeReward").textContent = `${reward}개`;
+  $("#prestigeRewardDetail").textContent = canPrestige ? prestigeRewardBreakdown().label : "미니마왕 처치 후 현재 성장과 원정 기록이 반영됩니다.";
   $("#prestigeButton").disabled = !canPrestige;
   $("#prestigeButton").textContent = canPrestige ? `📜 환생 계약 선택 · 영혼석 ${reward}개` : "미니마왕을 쓰러뜨리세요";
   $("#shopGemCount").textContent = format(state.gems);
@@ -622,15 +634,15 @@ function renderProfile() {
   const acc = getItem("accessories", state.equipped.accessory);
   const accMult = acc ? accessoryMultiplier(acc.id) : 1;
   const overallIncome = (incomeMultiplier() - 1) * 100;
-  const clickSpecial = (state.gemUpgrades.goldenGlove ? 1.5 : 1) * (1 + (state.legacyUpgrades.hands || 0) * .15 + relicLevel("thimble") * .15) * (state.activeContract === "labor" ? 4 : state.activeContract === "tycoon" ? 2.5 : 1);
-  const autoSpecial = (state.gemUpgrades.businessLicense ? 1.5 : 1) * (1 + relicLevel("clock") * .15) * (state.activeContract === "tycoon" ? .5 : 1);
+  const clickSpecial = (state.gemUpgrades.goldenGlove ? 1.5 : 1) * (1 + (state.legacyUpgrades.hands || 0) * .15 + relicBonus("thimble")) * (state.activeContract === "labor" ? 4 : state.activeContract === "tycoon" ? 2.5 : 1);
+  const autoSpecial = (state.gemUpgrades.businessLicense ? 1.5 : 1) * (1 + relicBonus("clock")) * (state.activeContract === "tycoon" ? .5 : 1);
   const clickBonus = ((1 + overallIncome / 100) * clickSpecial - 1) * 100;
   const autoRaw = baseIncome() * incomeMultiplier();
   const autoBonus = autoRaw > 0 ? passiveIncome() / autoRaw * 100 : 100;
   const baseAttackBonus = (state.blessings.attack || 0) * .1 + (state.gemUpgrades.heroSeal ? .25 : 0) + (acc?.attackPercent || 0) * accMult;
   const baseHealthBonus = (state.blessings.health || 0) * .1 + (state.gemUpgrades.heroSeal ? .25 : 0) + (acc?.healthPercent || 0) * accMult;
-  const attackBonus = ((1 + baseAttackBonus) * (1 + (state.legacyUpgrades.warrior || 0) * .1 + relicLevel("fang") * .1) * (state.activeContract === "labor" ? .65 : 1) - 1) * 100;
-  const healthBonus = ((1 + baseHealthBonus) * (1 + (state.legacyUpgrades.warrior || 0) * .1 + relicLevel("shell") * .1) * (state.activeContract === "labor" ? .65 : 1) - 1) * 100;
+  const attackBonus = ((1 + baseAttackBonus) * (1 + (state.legacyUpgrades.warrior || 0) * .1 + relicBonus("fang")) * (state.activeContract === "labor" ? .65 : 1) - 1) * 100;
+  const healthBonus = ((1 + baseHealthBonus) * (1 + (state.legacyUpgrades.warrior || 0) * .1 + relicBonus("shell")) * (state.activeContract === "labor" ? .65 : 1) - 1) * 100;
   const rewardBonus = (rewardMultiplier() * worldRewardScale() - 1) * 100;
   const critChance = Math.min(75, 5 + s.luck * .2);
   const enhanceBonus = (state.blessings.enhance || 0) * 2 + (state.gemUpgrades.luckyAnvil ? 10 : 0);
@@ -645,7 +657,7 @@ function renderProfile() {
     state.gemUpgrades.heroSeal ? "용사의 인장 +25%" : "",
     acc?.attackPercent ? `${acc.name} +${Number((acc.attackPercent*accMult*100).toFixed(1))}%` : "",
     state.legacyUpgrades.warrior ? `계승된 육체 +${state.legacyUpgrades.warrior*10}%` : "",
-    relicLevel("fang") ? `심연의 송곳니 +${relicLevel("fang")*10}%` : "",
+    relicLevel("fang") ? `심연의 송곳니 +${Math.round(relicBonus("fang")*100)}%` : "",
     state.activeContract === "labor" ? "맨손 노동왕 -35%" : ""
   ]);
   const healthSources = joinSources([
@@ -653,7 +665,7 @@ function renderProfile() {
     state.gemUpgrades.heroSeal ? "용사의 인장 +25%" : "",
     acc?.healthPercent ? `${acc.name} +${Number((acc.healthPercent*accMult*100).toFixed(1))}%` : "",
     state.legacyUpgrades.warrior ? `계승된 육체 +${state.legacyUpgrades.warrior*10}%` : "",
-    relicLevel("shell") ? `고대의 껍질 +${relicLevel("shell")*10}%` : "",
+    relicLevel("shell") ? `고대의 껍질 +${Math.round(relicBonus("shell")*100)}%` : "",
     state.activeContract === "labor" ? "맨손 노동왕 -35%" : ""
   ]);
   const rewardSources = joinSources([
@@ -661,7 +673,7 @@ function renderProfile() {
     acc?.reward ? `${acc.name} +${Number((acc.reward*accMult*100).toFixed(1))}%` : "",
     discoveredCount() ? `도감 ${discoveredCount()}종 +${Number((discoveredCount() * (1 + (state.village.museum || 0) * .1)).toFixed(1))}%${state.village.museum ? ` (박물관 Lv.${state.village.museum})` : ""}` : "",
     `세계 ${state.worldTier} 보상 ×${Number(worldRewardScale().toFixed(2))}`,
-    relicLevel("idol") ? `탐욕의 우상 +${relicLevel("idol")*12}%` : "",
+    relicLevel("idol") ? `탐욕의 우상 +${Math.round(relicBonus("idol")*100)}%` : "",
     state.activeContract === "hunter" ? "현상금 사냥꾼 ×5" : "",
     state.activeContract === "tycoon" ? "무일푼 재벌 ×0.2" : ""
   ]);
@@ -671,10 +683,13 @@ function renderProfile() {
   ].map(([label,value])=>`<div><span>${label}</span><b>${value}</b></div>`).join("");
   const rows = [
     ["🪙","전체 수익",incomeSources,overallIncome],
-    ["☝️","클릭 수익",joinSources([incomeSources === "적용 효과 없음" ? "" : incomeSources,state.gemUpgrades.goldenGlove?"황금 장갑 +50%":"",state.legacyUpgrades.hands?`전설의 손 +${state.legacyUpgrades.hands*15}%`:"",relicLevel("thimble")?`황금 골무 +${relicLevel("thimble")*15}%`:"",state.activeContract==="labor"?"맨손 노동왕 ×4":"",state.activeContract==="tycoon"?"무일푼 재벌 ×2.5":""]),clickBonus],
-    ["⏱️","자동 전환 효율",joinSources([`클릭 1회 수익의 최대 ${AUTO_CAP_RATIO*100}%/초`,state.gemUpgrades.businessLicense?"사업 허가증 +50%":"",relicLevel("clock")?`멈춘 시계 +${relicLevel("clock")*15}%`:"",state.activeContract==="tycoon"?"무일푼 재벌 ×0.5":""]),autoBonus],
+    ["☝️","클릭 수익",joinSources([incomeSources === "적용 효과 없음" ? "" : incomeSources,state.gemUpgrades.goldenGlove?"황금 장갑 +50%":"",state.legacyUpgrades.hands?`전설의 손 +${state.legacyUpgrades.hands*15}%`:"",relicLevel("thimble")?`황금 골무 +${Math.round(relicBonus("thimble")*100)}%`:"",state.activeContract==="labor"?"맨손 노동왕 ×4":"",state.activeContract==="tycoon"?"무일푼 재벌 ×2.5":""]),clickBonus],
+    ["⏱️","자동 전환 효율",joinSources([`클릭 1회 수익의 최대 ${AUTO_CAP_RATIO*100}%/초`,state.gemUpgrades.businessLicense?"사업 허가증 +50%":"",relicLevel("clock")?`멈춘 시계 +${Math.round(relicBonus("clock")*100)}%`:"",state.activeContract==="tycoon"?"무일푼 재벌 ×0.5":""]),autoBonus],
     ["⚔️","공격력",attackSources,attackBonus],
     ["❤️","체력",healthSources,healthBonus],
+    ["🌀","원정 공격력",abyssTrainingLevel("blade") ? `심연 검술 Lv.${abyssTrainingLevel("blade")}` : "심연 단련 없음",abyssTrainingBonus("blade") * 100],
+    ["🌀","원정 체력",abyssTrainingLevel("heart") ? `심연 생존술 Lv.${abyssTrainingLevel("heart")}` : "심연 단련 없음",abyssTrainingBonus("heart") * 100],
+    ["🌀","원정 피해 감소",abyssTrainingLevel("barrier") ? `심연 방벽 Lv.${abyssTrainingLevel("barrier")}` : "심연 단련 없음",abyssTrainingBonus("barrier") * 100],
     ["🏹","사냥 보상",rewardSources,rewardBonus],
     ["💥","크리티컬 확률",`기본 5% + 행운 ${format(s.luck)} × 0.2%`,critChance],
     ["🔨","강화 성공 보정",joinSources([state.blessings.enhance?`강화 장인 +${state.blessings.enhance*2}%`:"",state.gemUpgrades.luckyAnvil?"행운의 모루 +10%":""]),enhanceBonus],
@@ -688,6 +703,7 @@ function renderProfile() {
     ["◆ 방어력","몬스터의 공격력에서 방어력만큼 피해를 줄입니다. 최소 1의 피해는 받습니다."],
     ["✦ 행운","1당 크리티컬 확률이 0.2% 증가합니다. 크리티컬 피해는 2배입니다."],
     ["🪙 전체 수익","클릭과 자동수익 모두에 적용됩니다. 같은 종류의 보너스는 합산됩니다."],
+    ["🌀 원정 전용 성장","심연 단련은 일반 사냥이 아니라 심연 원정에서만 적용되는 영구 성장입니다."],
     ["🏹 사냥 보상","몬스터 처치 골드에 적용됩니다. 도감은 발견한 몬스터 1종당 1%를 더하고, 박물관이 그 효과를 증폭합니다."]
   ].map(([name,text])=>`<div><b>${name}</b><p>${text}</p></div>`).join("");
 }
@@ -749,7 +765,16 @@ function upgradeVillage(id) {
 }
 
 function expeditionMaxHp() {
-  return Math.max(1, Math.floor(stats().health * (1 + (state.expedition.buffs.vitality || 0) * .2)));
+  return Math.max(1, Math.floor(stats().health * (1 + (state.expedition.buffs.vitality || 0) * .2 + abyssTrainingBonus("heart"))));
+}
+
+function abyssTrainingLevel(id) { return Math.max(0, Math.floor(Number(state.abyssTraining?.[id]) || 0)); }
+function abyssTrainingBonus(id) {
+  const item = ABYSS_TRAINING.find(entry => entry.id === id);
+  return abyssTrainingLevel(id) * ((item?.per || 0) / 100);
+}
+function abyssTrainingCost(item, level = abyssTrainingLevel(item.id)) {
+  return Math.floor(item.base * Math.pow(item.growth, level));
 }
 
 function expeditionEnemy(floor = state.expedition.floor) {
@@ -804,9 +829,10 @@ function expeditionTacticStats(run = state.expedition) {
   const rewardBonus = (run.buffs.fortune || 0) * 25 + (run.buffs.greed || 0) * 30;
   const riskBonus = (run.buffs.greed || 0) * 8;
   return {
-    attack: (run.buffs.power || 0) * 25,
+    attack: (run.buffs.power || 0) * 25 + Math.round(abyssTrainingBonus("blade") * 100),
+    health: (run.buffs.vitality || 0) * 20 + Math.round(abyssTrainingBonus("heart") * 100),
     crit: (run.buffs.crit || 0) * 10,
-    guard: (run.buffs.guard || 0) * 15,
+    guard: (run.buffs.guard || 0) * 15 + Math.round(abyssTrainingBonus("barrier") * 100),
     rewardBonus,
     riskBonus,
     ward: run.buffs.ward || 0,
@@ -819,7 +845,7 @@ function expeditionIncomingDamage() {
   const base = Math.max(1, Math.floor(s.health * (.04 + state.expedition.floor * .005) - s.defense * .35));
   const depth = state.expedition.depth || state.expeditionDepth || 1;
   const elite = state.expedition.floor === 10 ? 1.25 : state.expedition.floor === 5 ? 1.12 : 1;
-  const guard = Math.max(.25, 1 - (state.expedition.buffs.guard || 0) * .15);
+  const guard = Math.max(.25, 1 - (state.expedition.buffs.guard || 0) * .15 - abyssTrainingBonus("barrier"));
   const greedRisk = 1 + (state.expedition.buffs.greed || 0) * .08;
   const ward = (state.expedition.buffs.ward || 0) > 0 ? .5 : 1;
   const scouted = Math.max(.5, 1 - (state.expedition.enemyWeakness || 0));
@@ -828,6 +854,29 @@ function expeditionIncomingDamage() {
 
 function expeditionEntryCost() { return Math.floor(Math.max(250000 * Math.pow(state.expeditionDepth, 2), clickValue() * 25 * state.expeditionDepth)); }
 function relicCraftCost() { return 15 + Object.values(state.relics || {}).reduce((sum, level) => sum + Number(level || 0), 0) * 3; }
+
+function renderAbyssTraining() {
+  $("#abyssTrainingList").innerHTML = ABYSS_TRAINING.map(item => {
+    const level = abyssTrainingLevel(item.id);
+    const maxed = level >= item.max;
+    const cost = abyssTrainingCost(item, level);
+    const disabled = state.expedition.active || maxed || state.relicShards < cost;
+    return `<article class="abyss-training-card ${maxed ? "maxed" : ""}"><span>${item.icon}</span><div><b>${item.name} Lv.${level}</b><small>${item.effect} +${level * item.per}% · 최대 Lv.${item.max}</small></div><button data-action="buy-abyss-training" data-id="${item.id}" ${disabled ? "disabled" : ""}>${maxed ? "완료" : `🔮 ${format(cost)}`}</button></article>`;
+  }).join("");
+}
+
+function buyAbyssTraining(id) {
+  const item = ABYSS_TRAINING.find(entry => entry.id === id);
+  const level = abyssTrainingLevel(id);
+  if (!item || state.expedition.active || level >= item.max) return;
+  const cost = abyssTrainingCost(item, level);
+  if (state.relicShards < cost) return showToast(`유물 조각 ${format(cost)}개가 필요합니다.`);
+  state.relicShards -= cost;
+  state.abyssTraining[id] = level + 1;
+  saveGame(false);
+  renderExpedition();
+  showToast(`${item.name} Lv.${level + 1}! 원정에서 ${item.effect} +${item.per}%`);
+}
 
 function renderRelics() {
   const cost = relicCraftCost();
@@ -838,7 +887,7 @@ function renderRelics() {
     const equipped = state.equippedRelics.includes(item.id);
     return `<article class="relic-card ${equipped ? "equipped" : ""} ${level ? "" : "locked"}"><span>${level ? item.icon : "❔"}</span><div><b>${level ? item.name : "미발견 유물"}${level ? ` Lv.${level}` : ""}</b><small>${level ? `${item.effect} +${level * item.per}%` : "심연 유물 공방에서 제작"}</small></div><button data-action="toggle-relic" data-id="${item.id}" ${!level || state.expedition.active ? "disabled" : ""}>${equipped ? "장착 해제" : "장착"}</button></article>`;
   }).join("");
-  $("#relicSlots").textContent = `${state.equippedRelics.length} / 2 장착`;
+  $("#relicSlots").textContent = `${state.equippedRelics.length} / ${relicSlotLimit()} 장착`;
 }
 
 function craftRelic() {
@@ -848,7 +897,7 @@ function craftRelic() {
   state.relicShards -= cost;
   const item = candidates[Math.floor(Math.random() * candidates.length)];
   state.relics[item.id] = (state.relics[item.id] || 0) + 1;
-  if (state.equippedRelics.length < 2 && !state.equippedRelics.includes(item.id)) state.equippedRelics.push(item.id);
+  if (state.equippedRelics.length < relicSlotLimit() && !state.equippedRelics.includes(item.id)) state.equippedRelics.push(item.id);
   saveGame(false);
   renderExpedition();
   render();
@@ -860,7 +909,7 @@ function toggleRelic(id) {
   const index = state.equippedRelics.indexOf(id);
   if (index >= 0) state.equippedRelics.splice(index, 1);
   else {
-    if (state.equippedRelics.length >= 2) return showToast("유물은 최대 2개까지 장착할 수 있습니다.");
+    if (state.equippedRelics.length >= relicSlotLimit()) return showToast(`유물은 현재 최대 ${relicSlotLimit()}개까지 장착할 수 있습니다.`);
     state.equippedRelics.push(id);
   }
   saveGame(false);
@@ -907,6 +956,7 @@ function renderExpedition() {
   $("#expeditionBuffs").innerHTML = buffs.length ? buffs.map(text => `<span>${text}</span>`).join("") : "<small>아직 획득한 원정 효과가 없습니다.</small>";
   $("#expeditionRunStats").innerHTML = [
     ["⚔️", "공격", `+${tacticStats.attack}%`],
+    ["❤️", "체력", `+${tacticStats.health}%`],
     ["💥", "치명", `+${tacticStats.crit}%`],
     ["🛡️", "피해감소", `+${tacticStats.guard}%`],
     ["🔮", "보상", `+${tacticStats.rewardBonus}%`],
@@ -935,6 +985,7 @@ function renderExpedition() {
   }).join("");
   const hasMilestoneReward = EXPEDITION_MILESTONES.some(item => clearedDepth >= item.depth && !state.claimedExpeditionMilestones[item.id]);
   $("#expeditionNavBadge").hidden = !run.awaitingChoice && !hasMilestoneReward;
+  renderAbyssTraining();
   renderRelics();
 }
 
@@ -953,8 +1004,12 @@ function startExpedition() {
 
 function expeditionRewardAt(depth, completed, victory = false, fortune = 0, greed = 0) {
   if (completed <= 0) return 0;
-  const base = (completed + (victory ? 5 : 0)) * (1 + (Math.max(1, depth) - 1) * .75);
-  return Math.max(1, Math.floor(base * (1 + fortune * .25 + greed * .3) * (1 + (state.village.guild || 0) * .1) * (1 + relicLevel("map") * .2)));
+  const safeDepth = Math.max(1, depth);
+  const floorReward = completed * (3 + safeDepth * 2);
+  const checkpointReward = Math.floor(completed / 5) * safeDepth * 8;
+  const clearReward = victory ? safeDepth * 30 : 0;
+  const base = floorReward + checkpointReward + clearReward;
+  return Math.max(1, Math.floor(base * (1 + fortune * .25 + greed * .3) * (1 + (state.village.guild || 0) * .1) * (1 + relicBonus("map"))));
 }
 
 function expeditionReward(completed, victory = false) { return expeditionRewardAt(state.expedition.depth || 1, completed, victory, state.expedition.buffs.fortune || 0, state.expedition.buffs.greed || 0); }
@@ -1001,9 +1056,10 @@ function expeditionTurn() {
   if (!run.active || run.awaitingChoice) return;
   const s = stats();
   const enemy = expeditionEnemy(run.floor);
+  const tacticStats = expeditionTacticStats(run);
   const critChance = Math.min(.9, .05 + s.luck * .002 + (run.buffs.crit || 0) * .1);
   const critical = Math.random() < critChance;
-  const damage = Math.max(1, Math.floor(s.attack * (1 + (run.buffs.power || 0) * .25) * (.9 + Math.random() * .2) * (critical ? 2 : 1)));
+  const damage = Math.max(1, Math.floor(s.attack * (1 + tacticStats.attack / 100) * (.9 + Math.random() * .2) * (critical ? 2 : 1)));
   run.enemyHp -= damage;
   if (run.enemyHp <= 0) {
     state.expeditionBest = Math.max(state.expeditionBest, run.floor);
@@ -1293,8 +1349,19 @@ function gainXp(amount) {
 }
 
 function prestigeReward() {
-  if (!state.miniDemonKills) return 0;
-  return Math.max(1, state.worldTier + Math.floor(Math.sqrt(Math.min(25, state.miniDemonKills)) * 2) + Math.floor(Math.log10(Math.max(1, state.totalEarned)) / 4));
+  return prestigeRewardBreakdown().total;
+}
+
+function prestigeRewardBreakdown() {
+  if (!state.miniDemonKills) return { total: 0, label: "미니마왕 처치 후 현재 성장과 원정 기록이 반영됩니다." };
+  const boss = Math.floor(Math.sqrt(state.miniDemonKills) * 4);
+  const wealth = Math.max(0, Math.floor((Math.log10(Math.max(1, state.totalEarned)) - 5) * 1.5));
+  const level = Math.floor(Math.max(0, state.level - 1) / 15);
+  const expedition = Math.max(0, (state.expeditionDepth - 1) * 6 + Math.floor((state.expeditionBest || 0) / 2));
+  const world = Math.max(1, state.worldTier) * 2;
+  const contract = contractComplete() ? Math.max(1, state.worldTier) * 2 : 0;
+  const total = Math.max(3, 3 + boss + wealth + level + expedition + world + contract);
+  return { total, label: `기본 3 · 마왕 +${boss} · 재산 +${wealth} · 레벨 +${level} · 원정 +${expedition} · 세계 +${world}${contract ? ` · 계약 +${contract}` : ""}` };
 }
 
 function prestige(nextContractId) {
@@ -1316,6 +1383,7 @@ function prestige(nextContractId) {
   const claimedExpeditionMilestones = { ...state.claimedExpeditionMilestones };
   const relics = { ...state.relics };
   const equippedRelics = [...state.equippedRelics];
+  const abyssTraining = { ...state.abyssTraining };
   const legacyUpgrades = { ...state.legacyUpgrades };
   const completedContracts = { ...state.completedContracts };
   const completed = contractComplete();
@@ -1341,6 +1409,7 @@ function prestige(nextContractId) {
   state.claimedExpeditionMilestones = claimedExpeditionMilestones;
   state.relics = relics;
   state.equippedRelics = equippedRelics;
+  state.abyssTraining = abyssTraining;
   state.legacyUpgrades = legacyUpgrades;
   state.completedContracts = completedContracts;
   state.legacyMarks = legacyMarks;
@@ -1366,6 +1435,7 @@ function buyBlessing(id) {
   if (state.souls < price) return;
   state.souls -= price;
   state.blessings[id] = level + 1;
+  saveGame(false);
   showToast("영혼의 축복이 강해졌습니다.");
   render();
 }
@@ -1434,7 +1504,7 @@ function hydrateSave(parsed, includeOffline = false) {
   const merged = { ...base, ...parsed };
   const incomingVersion = Number(parsed.balanceVersion || 0);
   merged.balanceVersion = 11;
-  ["clickLevels","jobs","training","pointStats","enhancements","enhancePity","blessings","gemUpgrades","legacyUpgrades","relics","completedContracts","claimedGemPackages","claimedChallenges","claimedExpeditionMilestones","discovered","kills","materials","equipped"].forEach(key => merged[key] = { ...base[key], ...(parsed[key] || {}) });
+  ["clickLevels","jobs","training","pointStats","enhancements","enhancePity","blessings","gemUpgrades","legacyUpgrades","relics","abyssTraining","completedContracts","claimedGemPackages","claimedChallenges","claimedExpeditionMilestones","discovered","kills","materials","equipped"].forEach(key => merged[key] = { ...base[key], ...(parsed[key] || {}) });
   merged.owned = { ...base.owned, ...(parsed.owned || {}) };
   merged.village = { ...base.village, ...(parsed.village || {}) };
   merged.expedition = { ...base.expedition, ...(parsed.expedition || {}) };
@@ -1446,9 +1516,10 @@ function hydrateSave(parsed, includeOffline = false) {
   merged.worldTier = Math.max(1, Math.floor(Number(parsed.worldTier ?? 1) || 1));
   if (incomingVersion < 8 && !Object.values(merged.completedContracts).some(count => Number(count) > 0)) merged.worldTier = 1;
   merged.activeContract = LIFE_CONTRACTS.some(item => item.id === merged.activeContract) ? merged.activeContract : null;
-  merged.equippedRelics = Array.isArray(parsed.equippedRelics) ? parsed.equippedRelics.filter(id => RELICS.some(item => item.id === id) && (merged.relics[id] || 0) > 0).slice(0, 2) : [];
+  merged.equippedRelics = Array.isArray(parsed.equippedRelics) ? parsed.equippedRelics.filter(id => RELICS.some(item => item.id === id) && (merged.relics[id] || 0) > 0).slice(0, relicSlotLimitForDepth(merged.expeditionDepth)) : [];
   LEGACY_UPGRADES.forEach(item => { merged.legacyUpgrades[item.id] = Math.max(0, Math.min(10, Math.floor(Number(merged.legacyUpgrades[item.id]) || 0))); });
   RELICS.forEach(item => { merged.relics[item.id] = Math.max(0, Math.min(5, Math.floor(Number(merged.relics[item.id]) || 0))); });
+  ABYSS_TRAINING.forEach(item => { merged.abyssTraining[item.id] = Math.max(0, Math.min(item.max, Math.floor(Number(merged.abyssTraining[item.id]) || 0))); });
   merged.expeditionBest = Math.max(0, Math.min(10, Math.floor(Number(merged.expeditionBest) || 0)));
   merged.expeditionDepth = Math.max(1, Math.min(100, Math.floor(Number(parsed.expeditionDepth ?? (merged.expeditionBest >= 10 ? 2 : 1)) || 1)));
   merged.expeditionRuns = Math.max(0, Math.floor(Number(merged.expeditionRuns) || 0));
@@ -1694,7 +1765,7 @@ document.addEventListener("click", (event) => {
   const action = event.target.closest("[data-action]");
   if (action) {
     const id = action.dataset.id;
-    const actions = { "buy-click": buyClick, "buy-job": buyJob, "buy-training": buyTraining, "spend-point": spendPoint, "buy-gear": buyGear, "select-monster": selectMonster, "buy-blessing": buyBlessing, "buy-gems": buyGems, "buy-gem-item": buyGemItem, "claim-challenge": claimChallenge, "claim-expedition-milestone": claimExpeditionMilestone, "upgrade-village": upgradeVillage, "choose-expedition": chooseExpeditionBuff, "start-contract": prestige, "buy-legacy": buyLegacy, "toggle-relic": toggleRelic };
+    const actions = { "buy-click": buyClick, "buy-job": buyJob, "buy-training": buyTraining, "spend-point": spendPoint, "buy-gear": buyGear, "select-monster": selectMonster, "buy-blessing": buyBlessing, "buy-gems": buyGems, "buy-gem-item": buyGemItem, "claim-challenge": claimChallenge, "claim-expedition-milestone": claimExpeditionMilestone, "upgrade-village": upgradeVillage, "buy-abyss-training": buyAbyssTraining, "choose-expedition": chooseExpeditionBuff, "start-contract": prestige, "buy-legacy": buyLegacy, "toggle-relic": toggleRelic };
     actions[action.dataset.action]?.(id);
   }
 });

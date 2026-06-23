@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <meta name="theme-color" content="#14110f">
   <title>무한 거지 용사</title>
-  <link rel="stylesheet" href="style.css?v=20260623-1">
+  <link rel="stylesheet" href="style.css?v=20260623-2">
 </head>
 <body>
   <div class="app-shell">
@@ -183,6 +183,9 @@
         <div class="abyss-section-heading"><div><small>더 깊이 내려갈수록 특별 보상</small><h3>심도 정복 기록</h3></div><span>계정 영구 보상</span></div>
         <div class="expedition-milestones" id="expeditionMilestones"></div>
 
+        <div class="abyss-section-heading"><div><small>조각을 직접 힘으로 바꾸기</small><h3>심연 단련</h3></div><span>원정 전용 영구 성장</span></div>
+        <div class="abyss-training-grid" id="abyssTrainingList"></div>
+
         <div class="relic-heading"><div><small>유물 조각의 사용처</small><h3>심연 유물 공방</h3></div><span id="relicSlots">0 / 2 장착</span></div>
         <button class="relic-craft" id="craftRelic">🔮 <span id="relicCraftCost">15</span>개로 유물 제작</button>
         <div class="relic-list" id="relicList"></div>
@@ -208,6 +211,7 @@
           <h2>환생</h2>
           <p>미니마왕을 쓰러뜨린 뒤 다음 삶의 계약을 고릅니다. 계약을 완수하면 더 강한 세계와 운명 인장이 열립니다.</p>
           <div class="prestige-reward">예상 영혼석 <b id="prestigeReward">0개</b></div>
+          <small class="prestige-detail" id="prestigeRewardDetail">마왕 처치 후 계산됩니다.</small>
           <button class="primary-button" id="prestigeButton" disabled>아직 때가 아니다</button>
         </div>
         <div class="section-heading"><div><span>모험은 기록으로 남는다</span><h2>모험 기록</h2></div></div>
@@ -321,6 +325,6 @@
   <div class="enhance-fx" id="enhanceFx" hidden>
     <div class="enhance-burst"></div><span id="enhanceFxIcon">✨</span><strong id="enhanceFxTitle">강화 성공!</strong><small id="enhanceFxText">장비가 더욱 강해졌습니다</small>
   </div>
-  <script src="app.js?v=20260623-1"></script>
+  <script src="app.js?v=20260623-2"></script>
 </body>
 </html>
